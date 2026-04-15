@@ -10,8 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          accountId: 0460b48ba548eb09724386f2f14c944f
-          command: pages deploy . --project-name=liveavatardemoapp --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 0460b48ba548eb09724386f2f14c944f
+        run: npx wrangler pages deploy . --project-name=liveavatardemoapp --branch=main --commit-dirty=true
