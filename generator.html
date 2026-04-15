@@ -447,7 +447,7 @@ select.fld option{background:#0f2218}
 //  STORAGE
 // ═══════════════════════════════════
 const S = {
-  get(k,d){ try{ const v=localStorage.getItem('lavgen_'+k); return v!==null?JSON.parse(v):d; }catch(){ return d; } },
+  get(k,d){ try{ const v=localStorage.getItem('lavgen_'+k); return v!==null?JSON.parse(v):d; }catch(e){ return d; } },
   set(k,v){ try{ localStorage.setItem('lavgen_'+k,JSON.stringify(v)); }catch(e){} }
 };
 
