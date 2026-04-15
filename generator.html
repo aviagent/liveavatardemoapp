@@ -829,13 +829,19 @@ function downloadAllPrompts(){
 // ═══════════════════════════════════
 let photoFiles = []; // { file, dataUrl }
 
+// Block browser default drag-drop (prevents image from opening fullscreen)
+document.addEventListener('dragover', e=>e.preventDefault());
+document.addEventListener('drop', e=>e.preventDefault());
+
 const photoZone = document.getElementById('photoZone');
 const photoInput = document.getElementById('photoFileInput');
 
-photoZone.addEventListener('dragover', e=>{ e.preventDefault(); photoZone.classList.add('drag-over'); });
-photoZone.addEventListener('dragleave', ()=>photoZone.classList.remove('drag-over'));
-photoZone.addEventListener('drop', e=>{ e.preventDefault(); photoZone.classList.remove('drag-over'); addPhotos([...e.dataTransfer.files]); });
-photoInput.addEventListener('change', ()=>addPhotos([...photoInput.files]));
+photoZone.addEventListener('dragenter', e=>{ e.preventDefault(); photoZone.classList.add('drag-over'); });
+photoZone.addEventListener('dragover', e=>{ e.preventDefault(); e.stopPropagation(); photoZone.classList.add('drag-over'); });
+photoZone.addEventListener('dragleave', e=>{ if(!photoZone.contains(e.relatedTarget)) photoZone.classList.remove('drag-over'); });
+photoZone.addEventListener('drop', e=>{ e.preventDefault(); e.stopPropagation(); photoZone.classList.remove('drag-over'); addPhotos([...e.dataTransfer.files]); });
+photoZone.addEventListener('click', ()=>photoInput.click());
+photoInput.addEventListener('change', ()=>{ addPhotos([...photoInput.files]); photoInput.value=''; });
 
 function addPhotos(files){
   const imgs = files.filter(f=>f.type.startsWith('image/')).slice(0, 3 - photoFiles.length);
