@@ -1,0 +1,1882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#1a3a2a"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<title>Live Avatar — Avi Agentics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;width:100%;overflow:hidden;background:#1b3d2a}
+body{font-family:'Lato',sans-serif}
+
+:root{
+  --gold:#c9a84c;--gold2:#e8c97a;--gold3:#a07830;
+  --green:#1a3a2a;--green2:#2a5a40;
+  --bg:#1b3d2a;--bg2:#163322;
+  --shadow-glow:0 0 32px rgba(201,168,76,0.35),0 8px 32px rgba(0,0,0,0.4);
+  --shadow-btn:0 6px 24px rgba(26,58,42,0.6),0 2px 8px rgba(201,168,76,0.2),inset 0 1px 0 rgba(255,255,255,0.12);
+}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;background:linear-gradient(180deg,var(--bg),var(--bg2))}
+
+/* ── HEADER ── */
+.hdr{
+  flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;padding-top:max(12px,env(safe-area-inset-top));
+  border-bottom:1px solid rgba(201,168,76,0.2);
+  background:rgba(22,50,32,0.95);backdrop-filter:blur(12px);z-index:10;
+}
+.hdr-brand .hdr-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--gold2);letter-spacing:3px;text-transform:uppercase}
+.hdr-brand .hdr-sub{font-size:9px;color:rgba(201,168,76,0.45);letter-spacing:4px;text-transform:uppercase;margin-top:1px}
+.icon-btn{
+  background:rgba(201,168,76,0.08);border:1.5px solid rgba(201,168,76,0.2);
+  color:rgba(201,168,76,0.7);border-radius:50%;width:38px;height:38px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;
+}
+.icon-btn:active{background:rgba(201,168,76,0.18);transform:scale(0.92)}
+
+/* ── AVATAR SECTION ── */
+.av-section{flex:1;min-height:0;position:relative;display:flex;align-items:stretch}
+.av-wrap{width:100%;position:relative;overflow:hidden;background:#0e2418}
+
+.av-img{width:100%;height:100%;object-fit:cover;object-position:center 20%;display:block;transition:filter .5s}
+.av-ph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.av-ph-icon{font-size:64px;opacity:.4}
+.av-ph-text{color:rgba(201,168,76,0.6);font-size:12px;letter-spacing:2.5px;text-transform:uppercase}
+
+/* ── VIDEO ELEMENT (MuseTalk / R2 pre-baked) ── */
+.av-video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;object-position:top center;
+  display:none;z-index:2;
+}
+.av-video.playing{display:block}
+
+/* ── AVATAR STATES ── */
+@keyframes breathe{0%,100%{transform:scale(1) translateY(0)}45%{transform:scale(1.013) translateY(-3px)}65%{transform:scale(1.009) translateY(-2px)}}
+@keyframes talkBounce{0%,100%{transform:scale(1)}25%{transform:scale(1.018) translateY(-5px)}60%{transform:scale(1.009) translateY(-2px)}}
+@keyframes listenGlow{0%,100%{filter:brightness(1) saturate(1)}50%{filter:brightness(1.06) saturate(1.2)}}
+
+.state-idle    .av-img{animation:breathe 4.2s ease-in-out infinite;transform-origin:center bottom}
+.state-idle    .av-wrap{box-shadow:inset 0 0 0 0 transparent}
+.state-listening .av-img{animation:listenGlow 1s ease-in-out infinite}
+.state-listening .av-wrap{animation:listenRing 1.2s ease-in-out infinite}
+.state-thinking  .av-img{filter:brightness(0.8) saturate(0.6);animation:breathe 2s ease-in-out infinite}
+.state-talking   .av-img{animation:talkBounce 0.28s ease-in-out infinite;transform-origin:center bottom}
+
+@keyframes listenRing{0%,100%{box-shadow:inset 0 0 0 0 rgba(76,200,100,0)}60%{box-shadow:inset 0 0 0 5px rgba(76,200,100,0.28)}}
+
+/* ── MOUTH SVG ── */
+.mouth-wrap{
+  position:absolute;left:50%;transform:translateX(-50%);
+  bottom:30%;width:clamp(36px,11%,72px);
+  pointer-events:none;z-index:5;opacity:0;transition:opacity .25s;
+}
+.state-talking .mouth-wrap{opacity:1}
+
+/* ── OVERLAYS ── */
+.gradient-fade{position:absolute;bottom:0;left:0;right:0;height:130px;background:linear-gradient(to top,rgba(18,42,28,0.92),transparent);pointer-events:none;z-index:4}
+@keyframes floatSp{0%{transform:translateY(0);opacity:.8}100%{transform:translateY(-55px);opacity:0}}
+.sp{position:absolute;border-radius:50%;background:var(--gold2);animation:floatSp 2.8s ease-out infinite;z-index:5;pointer-events:none}
+
+/* ── STATUS BADGE ── */
+.status-badge{
+  position:absolute;top:12px;right:12px;z-index:7;
+  background:rgba(0,0,0,0.55);border:1.5px solid;border-radius:20px;
+  padding:5px 12px;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
+  backdrop-filter:blur(10px);display:flex;align-items:center;gap:6px;transition:all .35s;
+}
+.bdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+.state-idle     .status-badge{border-color:rgba(201,168,76,0.35);color:rgba(201,168,76,0.7)}
+.state-idle     .bdot{background:rgba(201,168,76,0.5)}
+.state-listening .status-badge{border-color:rgba(76,200,100,0.75);color:#86efac}
+.state-listening .bdot{background:#4ade80;animation:blink .75s ease-in-out infinite}
+.state-thinking  .status-badge{border-color:rgba(251,191,36,0.6);color:#fcd34d}
+.state-thinking  .bdot{background:#fbbf24;animation:blink .5s ease-in-out infinite}
+.state-talking   .status-badge{border-color:rgba(201,168,76,0.75);color:var(--gold2)}
+.state-talking   .bdot{background:var(--gold);animation:blink .35s ease-in-out infinite}
+
+/* ── NAME TAG ── */
+.name-tag{
+  position:absolute;top:12px;left:12px;z-index:7;
+  background:linear-gradient(135deg,rgba(201,168,76,0.88),rgba(160,120,48,0.88));
+  color:#1a1a08;border-radius:8px;padding:4px 11px;
+  font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  box-shadow:0 2px 10px rgba(0,0,0,0.45);backdrop-filter:blur(8px);
+}
+
+/* ── THINKING SPINNER ── */
+.think-layer{position:absolute;inset:0;z-index:8;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.22)}
+.state-thinking .think-layer{display:flex}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:44px;height:44px;border-radius:50%;border:3px solid rgba(201,168,76,0.15);border-top-color:var(--gold2);animation:spin .75s linear infinite}
+
+/* ── STATUS RING (bottom bar) ── */
+.status-ring{position:absolute;bottom:0;left:0;right:0;height:3px;z-index:6;transition:all .3s}
+@keyframes sweep{0%{background-position:0% 0}100%{background-position:200% 0}}
+.state-idle      .status-ring{background:linear-gradient(90deg,transparent,rgba(201,168,76,0.25),transparent);background-size:200% 100%;animation:sweep 3.5s linear infinite}
+.state-listening .status-ring{background:#4ade80;height:4px}
+.state-thinking  .status-ring{background:#fbbf24;height:4px}
+.state-talking   .status-ring{background:linear-gradient(90deg,var(--gold),var(--gold2),var(--gold));background-size:200% 100%;animation:sweep .55s linear infinite;height:4px}
+
+/* ── BOTTOM PANEL ── */
+.bottom{
+  flex-shrink:0;
+  background:linear-gradient(180deg,rgba(27,61,42,0.98),rgba(18,42,28,0.99));
+  border-top:1px solid rgba(201,168,76,0.25);backdrop-filter:blur(20px);
+  padding-bottom:max(14px,env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;
+}
+
+/* ── TRANSCRIPT ── */
+.transcript{padding:10px 14px 0;min-height:48px;max-height:108px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.transcript::-webkit-scrollbar{display:none}
+.bubble{
+  border-radius:14px;padding:9px 13px;margin-bottom:6px;
+  animation:fadeUp .22s ease;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.bubble-user{background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.25)}
+.bubble-av{background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.22)}
+.bubble-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px}
+.bubble-user .bubble-lbl{color:rgba(74,222,128,0.7)}
+.bubble-av   .bubble-lbl{color:rgba(201,168,76,0.7)}
+.bubble-txt{color:rgba(255,255,255,0.85);font-size:13px;line-height:1.5}
+.tx-empty{color:rgba(201,168,76,0.5);font-size:12px;text-align:center;letter-spacing:1px;padding:6px 0}
+
+/* ── WAVEFORM ── */
+.waveform{display:none;align-items:center;justify-content:center;gap:3px;height:38px;padding:0 14px}
+.state-listening .waveform{display:flex}
+.state-listening .transcript{display:none}
+@keyframes wb{0%,100%{height:3px;opacity:.4}50%{height:22px;opacity:1}}
+.wb{width:3px;border-radius:2px;background:var(--gold2);animation:wb .65s ease-in-out infinite}
+
+/* ── LIVE CAPTION (while listening) ── */
+.live-caption{
+  display:none;padding:4px 14px;
+  font-size:12px;color:rgba(74,222,128,0.7);letter-spacing:.3px;font-style:italic;
+  min-height:20px;
+}
+.state-listening .live-caption{display:block}
+
+/* ── PIPELINE STATUS ── */
+.pipeline{
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:5px 14px;font-size:10px;color:rgba(201,168,76,0.65);letter-spacing:1px;
+  text-transform:uppercase;
+}
+.pip-dot{width:5px;height:5px;border-radius:50%;background:rgba(201,168,76,0.2)}
+.pip-dot.active{background:var(--gold2)}
+.pip-label{font-size:9px}
+
+/* ── CONTROLS ── */
+.controls{display:flex;align-items:center;justify-content:space-around;padding:10px 20px 2px;gap:12px}
+.ctrl{display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;cursor:pointer;color:rgba(201,168,76,0.4);font-family:'Lato',sans-serif;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;transition:all .2s;padding:4px 8px}
+.ctrl:active{transform:scale(0.88);color:var(--gold2)}
+.ctrl svg{width:20px;height:20px}
+
+/* ── MIC BUTTON ── */
+.mic-btn{
+  width:68px;height:68px;border-radius:50%;flex-shrink:0;margin-top:-6px;
+  background:linear-gradient(145deg,var(--green2),var(--green));
+  border:3px solid var(--gold2);box-shadow:var(--shadow-glow);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;
+  position:relative;
+}
+.mic-btn:active{transform:scale(0.91)}
+.mic-btn svg{width:26px;height:26px;color:white}
+.mic-btn.listening{background:linear-gradient(145deg,#166534,#14532d);border-color:#4ade80;animation:micpulse 1s ease-in-out infinite}
+.mic-btn.thinking,.mic-btn.talking{opacity:0.55;cursor:not-allowed;animation:none}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(74,222,128,0.45),var(--shadow-glow)}50%{box-shadow:0 0 0 13px rgba(74,222,128,0.04),var(--shadow-glow)}}
+.stop-sq{width:18px;height:18px;background:white;border-radius:3px;display:none}
+.mic-btn.listening .mic-ic{display:none}
+.mic-btn.listening .stop-sq{display:block}
+
+/* ── MUTE / VOICE BAR ── */
+.voice-row{
+  display:flex;align-items:center;gap:8px;padding:6px 14px;
+  border-top:1px solid rgba(201,168,76,0.08);
+  font-size:10px;color:rgba(201,168,76,0.4);letter-spacing:.8px;text-transform:uppercase;
+}
+.voice-name{flex:1;font-style:italic;font-size:10px}
+.voice-chg{background:transparent;border:1px solid rgba(201,168,76,0.2);color:rgba(201,168,76,0.5);border-radius:20px;padding:3px 9px;font-size:9px;cursor:pointer;font-family:'Lato',sans-serif;letter-spacing:1px}
+.voice-chg:active{background:rgba(201,168,76,0.1)}
+
+/* ── SETTINGS SHEET ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:flex;align-items:flex-end;backdrop-filter:blur(5px)}
+.sheet{
+  background:linear-gradient(180deg,#1b3d2a,#132b1e);
+  border-radius:22px 22px 0 0;width:100%;max-height:90vh;overflow-y:auto;
+  padding:18px 18px max(18px,env(safe-area-inset-bottom));
+  box-shadow:0 -8px 40px rgba(0,0,0,0.6),0 -1px 0 rgba(201,168,76,0.25);
+  animation:slideUp .28s ease;
+}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sh-handle{width:34px;height:4px;background:rgba(201,168,76,0.25);border-radius:2px;margin:0 auto 14px}
+.sh-title{font-family:'Playfair Display',serif;font-size:19px;color:var(--gold2);margin-bottom:2px}
+.sh-sub{font-size:11px;color:rgba(201,168,76,0.4);letter-spacing:1px;margin-bottom:18px}
+.sh-section{font-size:9px;font-weight:700;letter-spacing:3px;color:rgba(201,168,76,0.5);text-transform:uppercase;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid rgba(201,168,76,0.1)}
+.fg{margin-bottom:13px}
+.fl{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.6);margin-bottom:5px;display:block}
+.fld{width:100%;padding:11px 13px;border-radius:11px;border:1.5px solid rgba(201,168,76,0.18);background:rgba(201,168,76,0.04);color:rgba(255,255,255,0.88);font-size:13px;font-family:'Lato',sans-serif;transition:border-color .2s}
+.fld:focus{outline:none;border-color:rgba(201,168,76,0.5)}
+.fld::placeholder{color:rgba(255,255,255,0.2)}
+select.fld option{background:#0f2218;color:white}
+.fhint{font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px}
+.cost-pill{display:inline-block;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);color:#86efac;border-radius:20px;padding:2px 9px;font-size:9px;font-weight:700;letter-spacing:1px;margin-left:8px}
+.btn-save{width:100%;padding:14px;border-radius:50px;border:none;cursor:pointer;background:linear-gradient(145deg,var(--green2),var(--green));color:white;font-family:'Lato',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px;box-shadow:var(--shadow-btn);transition:all .2s;margin-top:6px}
+.btn-save:active{transform:scale(0.97)}
+.btn-cancel{width:100%;padding:14px;border-radius:50px;border:1.5px solid rgba(201,168,76,0.25);cursor:pointer;background:transparent;color:rgba(201,168,76,0.6);font-family:'Lato',sans-serif;font-size:14px;margin-top:8px;transition:all .2s}
+
+/* ── CART BADGE ── */
+.cart-badge-btn{
+  background:rgba(201,168,76,0.08);border:1.5px solid rgba(201,168,76,0.2);
+  color:rgba(201,168,76,0.6);border-radius:50px;padding:0 12px;height:38px;
+  display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;
+  letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;
+  transition:all .2s;font-family:'Lato',sans-serif;position:relative;
+}
+.cart-badge-btn:active{background:rgba(201,168,76,0.18);transform:scale(0.93)}
+.cart-badge-btn.has-items{border-color:var(--gold);color:var(--gold2)}
+.cart-count{
+  background:var(--gold);color:#0a1810;border-radius:50%;
+  width:18px;height:18px;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+}
+
+/* ── CART DRAWER ── */
+.cart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:none;backdrop-filter:blur(4px)}
+.cart-overlay.open{display:block}
+.cart-drawer{
+  position:fixed;bottom:0;left:0;right:0;z-index:301;
+  background:linear-gradient(180deg,#0f2218,#0a1810);
+  border-radius:22px 22px 0 0;
+  border-top:1px solid rgba(201,168,76,0.25);
+  box-shadow:0 -8px 40px rgba(0,0,0,.6);
+  max-height:75vh;display:flex;flex-direction:column;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);
+}
+.cart-drawer.open{transform:translateY(0)}
+.cart-handle{width:36px;height:4px;background:rgba(201,168,76,0.25);border-radius:2px;margin:14px auto 0;flex-shrink:0}
+.cart-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;flex-shrink:0;border-bottom:1px solid rgba(201,168,76,0.1)}
+.cart-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--gold2)}
+.cart-close{background:transparent;border:none;color:rgba(255,255,255,0.4);font-size:22px;cursor:pointer;line-height:1;padding:4px}
+.cart-items{flex:1;overflow-y:auto;padding:12px 18px;-webkit-overflow-scrolling:touch}
+.cart-items::-webkit-scrollbar{display:none}
+.cart-item{
+  display:flex;align-items:center;gap:12px;
+  padding:12px;border-radius:12px;
+  background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.12);
+  margin-bottom:8px;
+}
+.ci-name{flex:1;font-size:14px;color:rgba(255,255,255,0.88)}
+.ci-price{font-size:13px;color:var(--gold2);font-weight:700;margin-right:4px}
+.ci-qty{display:flex;align-items:center;gap:8px}
+.qty-btn{
+  background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.2);
+  color:var(--gold2);border-radius:50%;width:28px;height:28px;
+  font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;font-family:'Lato',sans-serif;
+}
+.qty-btn:active{transform:scale(0.88);background:rgba(201,168,76,0.2)}
+.qty-val{font-size:14px;font-weight:700;color:white;min-width:16px;text-align:center}
+.cart-empty{text-align:center;padding:32px;color:rgba(255,255,255,0.25);font-size:14px}
+.cart-footer{flex-shrink:0;padding:14px 18px;border-top:1px solid rgba(201,168,76,0.12);padding-bottom:max(14px,env(safe-area-inset-bottom))}
+.cart-total{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cart-total-lbl{font-size:12px;color:rgba(255,255,255,0.45);letter-spacing:1px;text-transform:uppercase}
+.cart-total-val{font-size:22px;font-weight:700;color:var(--gold2);font-family:'Playfair Display',serif}
+.btn-checkout{
+  width:100%;padding:15px;border-radius:50px;border:none;cursor:pointer;
+  background:linear-gradient(145deg,var(--green2),var(--green));
+  color:white;font-family:'Lato',sans-serif;font-size:16px;font-weight:700;
+  box-shadow:0 6px 24px rgba(26,58,42,0.55);transition:all .2s;
+}
+.btn-checkout:active{transform:scale(0.97)}
+
+/* ── CHECKOUT OVERLAY ── */
+.checkout-overlay{
+  position:fixed;inset:0;z-index:400;
+  background:linear-gradient(180deg,#0a1810,#071109);
+  display:none;flex-direction:column;
+  padding:max(20px,env(safe-area-inset-top)) 0 max(20px,env(safe-area-inset-bottom));
+}
+.checkout-overlay.open{display:flex}
+.checkout-inner{flex:1;overflow-y:auto;padding:0 20px}
+.checkout-inner::-webkit-scrollbar{display:none}
+.co-title{font-family:'Playfair Display',serif;font-size:26px;color:var(--gold2);margin-bottom:4px}
+.co-sub{font-size:11px;color:rgba(201,168,76,0.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:22px}
+.co-item{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(201,168,76,0.08);font-size:14px}
+.co-item-name{color:rgba(255,255,255,0.8)}
+.co-item-price{color:var(--gold2);font-weight:700}
+.co-total{display:flex;justify-content:space-between;padding:16px 0 0;margin-top:4px}
+.co-total-lbl{font-size:13px;font-weight:700;color:rgba(255,255,255,0.6);letter-spacing:1px;text-transform:uppercase}
+.co-total-val{font-size:26px;font-weight:700;color:var(--gold2);font-family:'Playfair Display',serif}
+.co-actions{padding:16px 20px;display:flex;flex-direction:column;gap:10px;flex-shrink:0}
+.btn-place-order{
+  padding:16px;border-radius:50px;border:none;cursor:pointer;
+  background:linear-gradient(145deg,var(--green2),var(--green));
+  color:white;font-family:'Lato',sans-serif;font-size:16px;font-weight:700;
+  box-shadow:0 6px 24px rgba(26,58,42,0.55);transition:all .2s;
+}
+.btn-place-order:active{transform:scale(0.97)}
+.btn-back-cart{
+  padding:14px;border-radius:50px;border:1.5px solid rgba(201,168,76,0.2);cursor:pointer;
+  background:transparent;color:rgba(201,168,76,0.6);
+  font-family:'Lato',sans-serif;font-size:14px;transition:all .2s;
+}
+
+/* ── ORDER CONFIRMED ── */
+@keyframes confPop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+.order-confirmed{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  flex:1;text-align:center;padding:20px;gap:16px;
+}
+.order-confirmed.show{display:flex}
+.conf-icon{font-size:72px;animation:confPop .5s ease forwards}
+.conf-title{font-family:'Playfair Display',serif;font-size:28px;color:var(--gold2)}
+.conf-sub{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.6;max-width:280px}
+.conf-num{font-size:13px;color:rgba(201,168,76,0.6);letter-spacing:2px;margin-top:4px}
+
+/* ── TOAST ── */
+@keyframes tin{from{transform:translateX(-50%) translateY(-70px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+@keyframes tout{from{opacity:1}to{opacity:0;transform:translateX(-50%) translateY(-30px)}}
+.toast{position:fixed;top:max(14px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:999;padding:10px 22px;border-radius:50px;font-size:13px;font-weight:700;white-space:nowrap;animation:tin .35s ease;box-shadow:var(--shadow-glow)}
+.toast-ok{background:linear-gradient(135deg,var(--green2),var(--green));color:white}
+.toast-warn{background:linear-gradient(135deg,#9a3412,#7c2d12);color:white}
+.toast-info{background:linear-gradient(135deg,#1e3a5f,#1e40af);color:white}
+.toast.out{animation:tout .3s ease forwards}
+
+/* ── TAB BAR ── */
+.tab-bar{display:flex;border-bottom:1px solid rgba(201,168,76,0.18);flex-shrink:0;background:rgba(0,0,0,0.15)}
+.tab{flex:1;padding:9px 4px;background:transparent;border:none;font-family:'Lato',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(201,168,76,0.45);cursor:pointer;transition:all .2s;border-bottom:2px solid transparent;display:flex;align-items:center;justify-content:center;gap:5px}
+.tab.active{color:var(--gold2);border-bottom-color:var(--gold)}
+.tab:active{background:rgba(201,168,76,0.06)}
+.tab svg{width:13px;height:13px;opacity:.7}
+.tab.active svg{opacity:1}
+
+/* ── PANEL WRAPPER ── */
+.tab-panels{height:150px;overflow:hidden;position:relative;flex-shrink:0}
+#panelChat{height:100%;display:flex;flex-direction:column;overflow:hidden}
+#panelMenu{height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#panelMenu::-webkit-scrollbar{display:none}
+.panel-hidden{display:none!important}
+
+/* ── MENU PANEL ── */
+.menu-cat{padding:8px 14px 4px}
+.menu-cat-title{font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:rgba(201,168,76,0.6);padding-bottom:6px;border-bottom:1px solid rgba(201,168,76,0.12);margin-bottom:6px}
+.menu-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
+.menu-item:last-child{border-bottom:none}
+.mi-name{flex:1;font-size:13px;color:rgba(255,255,255,0.9);line-height:1.3}
+.mi-price{font-size:12px;color:var(--gold2);font-weight:700;white-space:nowrap}
+.mi-add{background:rgba(201,168,76,0.14);border:1px solid rgba(201,168,76,0.35);color:var(--gold2);border-radius:50%;width:28px;height:28px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;font-family:'Lato',sans-serif;line-height:1}
+.mi-add:active{transform:scale(0.82);background:rgba(201,168,76,0.28)}
+
+/* ── MUSETALK BADGE ── */
+.mt-badge{
+  position:absolute;bottom:16px;left:12px;z-index:7;
+  background:rgba(0,0,0,0.5);border:1px solid rgba(201,168,76,0.25);
+  border-radius:20px;padding:4px 10px;font-size:9px;color:rgba(201,168,76,0.5);
+  letter-spacing:1px;text-transform:uppercase;backdrop-filter:blur(6px);
+}
+.mt-badge.live{border-color:rgba(74,222,128,0.5);color:#86efac}
+</style>
+</head>
+<body>
+<div id="app" class="state-idle">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="hdr-brand">
+      <div class="hdr-title">Live Avatar</div>
+      <div class="hdr-sub">Avi Agentics</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a href="admin.html" style="background:rgba(201,168,76,0.08);border:1.5px solid rgba(201,168,76,0.2);color:rgba(201,168,76,0.6);border-radius:50px;padding:0 12px;height:38px;display:flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;text-decoration:none">Library</a>
+      <button class="cart-badge-btn" id="cartBtn" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+      <button class="icon-btn" id="settingsBtn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- AVATAR -->
+  <div class="av-section">
+    <div class="av-wrap" id="avWrap">
+
+      <!-- Placeholder -->
+      <div class="av-ph" id="avPh">
+        <div class="av-ph-icon">✦</div>
+        <div class="av-ph-text">Add avatar image in settings</div>
+      </div>
+
+      <!-- Static hero image (idle / CSS animated) -->
+      <img class="av-img" id="avImg" src="" alt="Avatar" style="display:none"/>
+
+      <!-- Video element — MuseTalk output OR R2 pre-baked -->
+      <video class="av-video" id="avVideo" playsinline></video>
+
+      <!-- Mouth overlay -->
+      <div class="mouth-wrap" id="mouthWrap">
+        <svg viewBox="0 0 100 40" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#cc3333"/><stop offset="100%" stop-color="#881111"/></linearGradient></defs>
+          <path id="ulip" d="M10,18 Q25,10 50,14 Q75,10 90,18 Q75,22 50,20 Q25,22 10,18Z" fill="url(#lg)"/>
+          <path id="llip" d="M10,22 Q25,28 50,26 Q75,28 90,22 Q75,32 50,34 Q25,32 10,22Z" fill="url(#lg)"/>
+          <rect id="teeth" x="18" y="20" width="64" height="7" rx="2" fill="white" opacity="0"/>
+          <ellipse id="mopen" cx="50" cy="24" rx="38" ry="4" fill="#110000" opacity="0"/>
+        </svg>
+      </div>
+
+      <!-- Overlays -->
+      <div class="name-tag" id="nameTagEl">Anna</div>
+      <div class="status-badge"><div class="bdot"></div><span id="statTxt">Idle</span></div>
+      <div class="mt-badge" id="mtBadge">MuseTalk: offline</div>
+      <div class="think-layer"><div class="spinner"></div></div>
+      <div id="sparkWrap"></div>
+      <div class="gradient-fade"></div>
+      <div class="status-ring"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM -->
+  <div class="bottom">
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <button class="tab active" id="tabChatBtn" onclick="switchTab('chat')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chat
+      </button>
+      <button class="tab" id="tabMenuBtn" onclick="switchTab('menu')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        Menu
+      </button>
+    </div>
+
+    <!-- Tab Panels -->
+    <div class="tab-panels">
+
+      <!-- CHAT PANEL -->
+      <div id="panelChat">
+        <!-- Waveform (listening) -->
+        <div class="waveform" id="waveform">
+          <div class="wb" style="animation-delay:.00s"></div><div class="wb" style="animation-delay:.09s"></div>
+          <div class="wb" style="animation-delay:.18s"></div><div class="wb" style="animation-delay:.05s"></div>
+          <div class="wb" style="animation-delay:.13s"></div><div class="wb" style="animation-delay:.22s"></div>
+          <div class="wb" style="animation-delay:.07s"></div><div class="wb" style="animation-delay:.16s"></div>
+          <div class="wb" style="animation-delay:.11s"></div>
+        </div>
+        <!-- Live caption -->
+        <div class="live-caption" id="liveCaption"></div>
+        <!-- Transcript bubbles -->
+        <div class="transcript" id="transcript">
+          <div class="tx-empty" id="txEmpty">Listening… say anything to start</div>
+        </div>
+        <!-- Pipeline dots -->
+        <div class="pipeline">
+          <div class="pip-dot" id="pip0"></div><div class="pip-label">Hear</div>
+          <div class="pip-dot" id="pip1"></div><div class="pip-label">Think</div>
+          <div class="pip-dot" id="pip2"></div><div class="pip-label">Speak</div>
+        </div>
+        <!-- Voice row -->
+        <div class="voice-row">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          <span class="voice-name" id="voiceLabel">No voice configured</span>
+          <button class="voice-chg" id="testVoiceBtn">Test</button>
+        </div>
+      </div>
+
+      <!-- MENU PANEL -->
+      <div id="panelMenu" class="panel-hidden"></div>
+
+    </div><!-- /tab-panels -->
+
+    <!-- Controls (always visible) -->
+    <div class="controls">
+      <button class="ctrl" id="clearBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+        Clear
+      </button>
+
+      <button class="mic-btn" id="micBtn">
+        <svg class="mic-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <div class="stop-sq"></div>
+      </button>
+
+      <button class="ctrl" id="muteBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="muteIcon"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span id="muteLbl">Voice</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- CART DRAWER -->
+<div class="cart-overlay" id="cartOverlay"></div>
+<div class="cart-drawer" id="cartDrawer">
+  <div class="cart-handle"></div>
+  <div class="cart-hdr">
+    <div class="cart-title">Your Order</div>
+    <button class="cart-close" id="cartClose">✕</button>
+  </div>
+  <div class="cart-items" id="cartItems">
+    <div class="cart-empty">Your order is empty.<br/>Say "add the margherita" to start!</div>
+  </div>
+  <div class="cart-footer">
+    <div class="cart-total">
+      <span class="cart-total-lbl">Total</span>
+      <span class="cart-total-val" id="cartTotal">$0.00</span>
+    </div>
+    <button class="btn-checkout" id="checkoutBtn">Go to Checkout</button>
+  </div>
+</div>
+
+<!-- CHECKOUT OVERLAY -->
+<div class="checkout-overlay" id="checkoutOverlay">
+  <div class="checkout-inner" id="checkoutInner">
+    <div style="padding-bottom:8px">
+      <div class="co-title">Order Summary</div>
+      <div class="co-sub">Review before placing</div>
+    </div>
+    <div id="coItems"></div>
+    <div class="co-total">
+      <span class="co-total-lbl">Total</span>
+      <span class="co-total-val" id="coTotal">$0.00</span>
+    </div>
+  </div>
+  <div class="order-confirmed" id="orderConfirmed">
+    <div class="conf-icon">✅</div>
+    <div class="conf-title">Order Placed!</div>
+    <div class="conf-sub">Your order is being prepared.<br/>Anna will let you know when it's ready.</div>
+    <div class="conf-num" id="confNum">Order #0001</div>
+  </div>
+  <div class="co-actions" id="coActions">
+    <button class="btn-place-order" id="placeOrderBtn">✓ Place Order</button>
+    <button class="btn-back-cart" id="backToCartBtn">← Back to Cart</button>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="overlay" id="settingsOverlay" style="display:none">
+  <div class="sheet">
+    <div class="sh-handle"></div>
+    <div class="sh-title">Settings</div>
+    <div class="sh-sub">Configure your live avatar</div>
+
+    <div class="sh-section">Avatar</div>
+    <div class="fg"><label class="fl">Name</label><input class="fld" id="sName" placeholder="Anna" maxlength="32"/></div>
+    <div class="fg"><label class="fl">Hero Image URL (R2 or any direct URL)</label><input class="fld" id="sImg" placeholder="https://pub-xxx.r2.dev/anna-hero.jpg"/></div>
+
+    <div class="sh-section">AI Brain — Groq <span class="cost-pill">~$0/mo free tier</span></div>
+    <div class="fg">
+      <label class="fl">Groq API Key</label>
+      <input class="fld" id="sGroqKey" type="password" placeholder="gsk_..."/>
+      <div class="fhint">Free at console.groq.com — handles STT (Whisper) + AI (Llama). Free tier: 14,400 req/day.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">AI Model</label>
+      <select class="fld" id="sModel">
+        <option value="llama-3.3-70b-versatile">Llama 3.3 70B (best quality)</option>
+        <option value="llama-3.1-8b-instant">Llama 3.1 8B (fastest)</option>
+        <option value="mixtral-8x7b-32768">Mixtral 8x7B (balanced)</option>
+        <option value="gemma2-9b-it">Gemma 2 9B</option>
+      </select>
+    </div>
+
+    <div class="sh-section">Voice — Cartesia <span class="cost-pill">1M chars free/mo</span></div>
+    <div class="fg">
+      <label class="fl">Cartesia API Key</label>
+      <input class="fld" id="sCartesiaKey" type="password" placeholder="sk_car_..."/>
+      <div class="fhint">Free at cartesia.ai — most human-sounding, lowest latency TTS available.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Cartesia Voice ID</label>
+      <input class="fld" id="sVoiceId" placeholder="Voice ID from cartesia.ai/voices"/>
+      <div class="fhint">Browse voices at cartesia.ai/voices → copy the ID. Try "Barbra" or "Sophie" for Anna.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">TTS Speed</label>
+      <input class="fld" id="sTtsRate" type="range" min="0.7" max="1.4" step="0.05" value="1.0" style="padding:4px 0;border:none;background:transparent"/>
+      <div class="fhint">Speed: <span id="sTtsRateVal">1.0x</span></div>
+    </div>
+
+    <div class="sh-section">System Prompt</div>
+    <div class="fg">
+      <label class="fl">Avatar Personality</label>
+      <textarea class="fld" id="sSysPrompt" rows="4" placeholder="You are Anna, a warm and friendly AI host..."></textarea>
+      <div class="fhint">Keep it short. 1-2 sentence responses feel most natural in conversation.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Max Response Length</label>
+      <select class="fld" id="sMaxTok">
+        <option value="60">Very short (60 tokens — 1 sentence)</option>
+        <option value="120" selected>Short (120 tokens — 2 sentences)</option>
+        <option value="220">Medium (220 tokens — short paragraph)</option>
+      </select>
+    </div>
+
+    <div class="sh-section">Video Library (R2)</div>
+    <div class="fg">
+      <label class="fl">R2 Public Base URL</label>
+      <input class="fld" id="sR2Base" placeholder="https://pub-256xxx.r2.dev"/>
+      <div class="fhint">Your Cloudflare R2 bucket public URL — app checks manifest.json here before using live AI</div>
+    </div>
+
+    <div class="sh-section">Production Mode (optional)</div>
+    <div class="fg">
+      <label class="fl">Cloudflare Worker URL</label>
+      <input class="fld" id="sWorkerUrl" placeholder="https://your-worker.workers.dev/chat"/>
+      <div class="fhint">When set, all API calls route through your Worker. Keys stay server-side. Client only sends their API key.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Client API Key (for Worker mode)</label>
+      <input class="fld" id="sClientKey" placeholder="your-client-key"/>
+    </div>
+
+    <div class="sh-section">MuseTalk Lip-Sync (VPS) <span class="cost-pill">free — you own it</span></div>
+    <div class="fg">
+      <label class="fl">MuseTalk Endpoint</label>
+      <input class="fld" id="sMtUrl" placeholder="http://gemclaw.aviagentics.com:7860/animate"/>
+      <div class="fhint">Run MuseTalk on your VPS. When set, every response gets real lip-sync video instead of CSS animation.</div>
+    </div>
+
+    <div class="sh-section">Gap Logger (PocketBase) <span class="cost-pill">free — your VPS</span></div>
+    <div class="fg">
+      <label class="fl">PocketBase Proxy URL</label>
+      <input class="fld" id="sPbUrl" placeholder="https://stellas-pb-proxy.littf02.workers.dev"/>
+      <div class="fhint">Logs questions with no pre-baked video to PocketBase for self-healing. Same proxy as Stella's pizza.</div>
+    </div>
+
+    <div class="sh-section">Language</div>
+    <div class="fg">
+      <label class="fl">Language Code</label>
+      <input class="fld" id="sLang" placeholder="en"/>
+      <div class="fhint">e.g. en, fr, es, pt — used for Groq Whisper STT</div>
+    </div>
+
+    <button class="btn-save" id="saveBtn">Save & Close</button>
+    <button class="btn-cancel" id="cancelBtn">Cancel</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════
+//  STORAGE
+// ═══════════════════════════════════════════════════════
+const S = {
+  get(k, d){ try{ const v=localStorage.getItem('lav_'+k); if(v===null) return d; const p=JSON.parse(v); return (p===''||p===null||p===undefined)?d:p; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('lav_'+k,JSON.stringify(v)); }catch(e){} }
+};
+
+function cfg(){ return {
+  name:       S.get('name','Anna'),
+  imgUrl:     S.get('imgUrl','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev/anna-hero.jpg'),
+  groqKey:    S.get('groqKey',''),
+  model:      S.get('model','llama-3.3-70b-versatile'),
+  cartKey:    S.get('cartKey',''),
+  voiceId:    S.get('voiceId','d8955cfc-7f79-4d3f-a460-87c56ba0c76b'),
+  ttsRate:    S.get('ttsRate',1.0),
+  sysPrompt:  S.get('sysPrompt','You are Anna, the host at this upscale restaurant. You know this menu cold — burgers, wings, sliders, steak frites, craft cocktails, the works. Speak like a real person who loves this place. Use contractions, natural openers like "Oh,", "Mmm,", "You know what?", "Honestly,". One or two punchy sentences max. If someone asks about a dish, tell them what makes it good. Never use lists, bullet points, or markdown. Never say "certainly" or "of course". Sound like yourself, not a chatbot.'),
+  maxTok:     S.get('maxTok',120),
+  r2Base:     S.get('r2Base','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev'),
+  workerUrl:  S.get('workerUrl','https://anna-avatar-worker.littf02.workers.dev/chat'),
+  clientKey:  S.get('clientKey',''),
+  mtUrl:      S.get('mtUrl',''),
+  pbUrl:      S.get('pbUrl',''),
+  lang:       S.get('lang','en'),
+}; }
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let state = 'idle'; // idle | listening | thinking | talking
+let isMuted = S.get('muted', false);
+let history = [];          // conversation history
+let audioQueue = [];       // Cartesia audio blobs queued for playback
+let isPlayingAudio = false;
+let recorder = null;       // MediaRecorder
+let audioCtx = null;
+let analyser = null;
+let silenceTimer = null;
+let mouthRaf = null;
+let mouthOpen = 0;
+let mouthTarget = 0;
+let sparkTimer = null;
+let mtOnline = false;
+let bridgeActive = false;   // blocks TTS audio queue while bridge video plays
+let idleVideoActive = false; // true while idle video cycle is running
+
+const app    = document.getElementById('app');
+const avImg  = document.getElementById('avImg');
+const avPh   = document.getElementById('avPh');
+const avVid  = document.getElementById('avVideo');
+const statTxt= document.getElementById('statTxt');
+const micBtn = document.getElementById('micBtn');
+const muteBtn= document.getElementById('muteBtn');
+const muteLbl= document.getElementById('muteLbl');
+const muteIc = document.getElementById('muteIcon');
+const voiceLbl = document.getElementById('voiceLabel');
+const transcript = document.getElementById('transcript');
+const txEmpty  = document.getElementById('txEmpty');
+const liveCaption = document.getElementById('liveCaption');
+const nameTagEl = document.getElementById('nameTagEl');
+const sparkWrap = document.getElementById('sparkWrap');
+const mtBadge = document.getElementById('mtBadge');
+const pip = [document.getElementById('pip0'),document.getElementById('pip1'),document.getElementById('pip2')];
+const ulip = document.getElementById('ulip');
+const llip = document.getElementById('llip');
+const teethEl = document.getElementById('teeth');
+const mopenEl = document.getElementById('mopen');
+const settingsOverlay = document.getElementById('settingsOverlay');
+
+// ═══════════════════════════════════════════════════════
+//  STATE MACHINE
+// ═══════════════════════════════════════════════════════
+const stateLabels = { idle:'Idle', listening:'Listening…', thinking:'Thinking…', talking:'Speaking' };
+const pipMap = { idle:[0,0,0], listening:[1,0,0], thinking:[0,1,0], talking:[0,0,1] };
+
+function setState(s){
+  state = s;
+  app.className = 'state-'+s;
+  statTxt.textContent = stateLabels[s]||s;
+  const pm = pipMap[s]||[0,0,0];
+  pip.forEach((p,i) => p.classList.toggle('active', !!pm[i]));
+  micBtn.classList.remove('listening','thinking','talking');
+  if(s==='listening') micBtn.classList.add('listening');
+  if(s==='thinking')  micBtn.classList.add('thinking');
+  if(s==='talking')   micBtn.classList.add('talking');
+  if(s==='idle'){ startSparkles(); startIdleCycle(); }
+  else { stopSparkles(); idleVideoActive=false; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  AVATAR IMAGE
+// ═══════════════════════════════════════════════════════
+function loadAvatar(){
+  const c = cfg();
+  nameTagEl.textContent = c.name||'Anna';
+  if(c.imgUrl){
+    avImg.onload = ()=>{ avImg.style.display='block'; avPh.style.display='none'; };
+    avImg.onerror = ()=>{ avImg.style.display='none'; avPh.style.display='flex'; };
+    avImg.src = c.imgUrl;
+  } else {
+    avImg.style.display='none'; avPh.style.display='flex';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  SPARKLES
+// ═══════════════════════════════════════════════════════
+function startSparkles(){
+  if(sparkTimer) return;
+  sparkTimer = setInterval(()=>{
+    if(state!=='idle') return;
+    const sp = document.createElement('div'); sp.className='sp';
+    const sz = 2+Math.random()*4;
+    sp.style.cssText=`left:${8+Math.random()*84}%;bottom:${4+Math.random()*28}%;width:${sz}px;height:${sz}px;animation-delay:${Math.random()*.4}s;animation-duration:${2.2+Math.random()*.8}s`;
+    sparkWrap.appendChild(sp); setTimeout(()=>sp.remove(),3200);
+  }, 520);
+}
+function stopSparkles(){ clearInterval(sparkTimer); sparkTimer=null; sparkWrap.innerHTML=''; }
+
+// ═══════════════════════════════════════════════════════
+//  MOUTH ANIMATION
+// ═══════════════════════════════════════════════════════
+function animMouth(){
+  mouthOpen += (mouthTarget - mouthOpen) * 0.3;
+  const o = Math.max(0, Math.min(1, mouthOpen));
+  const upY = 18 - o*10, downY = 22 + o*13, midY = (upY+downY)/2, ry=(downY-upY)/2;
+  ulip.setAttribute('d',`M10,${upY+2} Q25,${upY-4} 50,${upY} Q75,${upY-4} 90,${upY+2} Q75,${midY} 50,${midY-1} Q25,${midY} 10,${upY+2}Z`);
+  llip.setAttribute('d',`M10,${downY-2} Q25,${downY+4} 50,${downY} Q75,${downY+4} 90,${downY-2} Q75,${midY} 50,${midY+1} Q25,${midY} 10,${downY-2}Z`);
+  teethEl.setAttribute('y', String(midY-ry*.55)); teethEl.setAttribute('height', String(ry));
+  teethEl.setAttribute('opacity', String(o*.85));
+  mopenEl.setAttribute('cy', String(midY)); mopenEl.setAttribute('ry', String(ry));
+  mopenEl.setAttribute('opacity', String(o*.95));
+  mouthRaf = requestAnimationFrame(animMouth);
+}
+function startMouth(){
+  if(!mouthRaf) mouthRaf = requestAnimationFrame(animMouth);
+  // Natural rhythm
+  function pulse(){
+    if(state!=='talking'){ mouthTarget=0; return; }
+    mouthTarget = 0.35 + Math.random()*0.65;
+    setTimeout(()=>{ mouthTarget=0.05; setTimeout(pulse, 55+Math.random()*110); }, 85+Math.random()*160);
+  }
+  pulse();
+}
+function stopMouth(){
+  if(mouthRaf){ cancelAnimationFrame(mouthRaf); mouthRaf=null; }
+  mouthOpen=0; mouthTarget=0;
+  ulip.setAttribute('d','M10,18 Q25,10 50,14 Q75,10 90,18 Q75,22 50,20 Q25,22 10,18Z');
+  llip.setAttribute('d','M10,22 Q25,28 50,26 Q75,28 90,22 Q75,32 50,34 Q25,32 10,22Z');
+  teethEl.setAttribute('opacity','0'); mopenEl.setAttribute('opacity','0');
+}
+
+// ═══════════════════════════════════════════════════════
+//  TRANSCRIPT BUBBLES
+// ═══════════════════════════════════════════════════════
+function addBubble(role, text){
+  txEmpty.style.display='none';
+  const d = document.createElement('div');
+  d.className = 'bubble bubble-'+(role==='user'?'user':'av');
+  const label = role==='user'?'You':(cfg().name||'Anna');
+  d.innerHTML = `<div class="bubble-lbl">${esc(label)}</div><div class="bubble-txt">${esc(text)}</div>`;
+  transcript.appendChild(d);
+  // Max 5 bubbles
+  const all = transcript.querySelectorAll('.bubble');
+  if(all.length>5) all[0].remove();
+  setTimeout(()=>{ transcript.scrollTop=transcript.scrollHeight; },40);
+}
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ═══════════════════════════════════════════════════════
+//  GROQ WHISPER — STT
+// ═══════════════════════════════════════════════════════
+async function transcribeAudio(blob){
+  const c = cfg();
+  const fd = new FormData();
+  fd.append('file', blob, 'audio.webm');
+  fd.append('model','whisper-large-v3-turbo');
+  fd.append('language', c.lang||'en');
+  fd.append('response_format','json');
+
+  const endpoint = c.workerUrl
+    ? c.workerUrl.replace('/chat','/transcribe')
+    : 'https://api.groq.com/openai/v1/audio/transcriptions';
+
+  const headers = c.workerUrl
+    ? { 'X-Client-Key': c.clientKey }
+    : { 'Authorization': 'Bearer '+c.groqKey };
+
+  try {
+    const r = await fetch(endpoint, { method:'POST', headers, body:fd });
+    if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error?.message||'Groq STT '+r.status); }
+    const data = await r.json();
+    return (data.text||'').trim();
+  } catch(e){ throw e; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  GROQ LLAMA — STREAMING LLM
+// ═══════════════════════════════════════════════════════
+async function streamLlama(messages, onSentence, onDone){
+  const c = cfg();
+
+  const endpoint = c.workerUrl||'https://api.groq.com/openai/v1/chat/completions';
+  const headers = { 'Content-Type':'application/json' };
+  if(c.workerUrl) headers['X-Client-Key'] = c.clientKey;
+  else headers['Authorization'] = 'Bearer '+c.groqKey;
+
+  const body = JSON.stringify({
+    model: c.model||'llama-3.3-70b-versatile',
+    messages,
+    stream: true,
+    max_tokens: parseInt(c.maxTok)||120,
+    temperature: 0.75,
+  });
+
+  const res = await fetch(endpoint, { method:'POST', headers, body });
+  if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error?.message||'Groq LLM '+res.status); }
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf='', textBuf='';
+
+  while(true){
+    const { done, value } = await reader.read();
+    if(done) break;
+    buf += dec.decode(value,{stream:true});
+    const lines = buf.split('\n'); buf=lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if(raw==='[DONE]') continue;
+      try{
+        const j = JSON.parse(raw);
+        const delta = j.choices?.[0]?.delta?.content||'';
+        textBuf += delta;
+        // Extract complete sentences to start TTS immediately
+        const { sentences, remaining } = extractSentences(textBuf);
+        textBuf = remaining;
+        for(const s of sentences) if(s.trim()) onSentence(s.trim());
+      }catch(e){}
+    }
+  }
+  if(textBuf.trim()) onSentence(textBuf.trim());
+  onDone();
+}
+
+function extractSentences(text){
+  const sentences=[];
+  // Split on . ! ? followed by space or end, but keep abbreviations intact
+  const re = /[^.!?…]+[.!?…]+(?:\s|$)/g;
+  let last=0, m;
+  while((m=re.exec(text))!==null){
+    sentences.push(m[0].trim());
+    last = m.index+m[0].length;
+  }
+  return { sentences, remaining: text.slice(last) };
+}
+
+// ═══════════════════════════════════════════════════════
+//  CARTESIA TTS
+// ═══════════════════════════════════════════════════════
+async function cartesiaTTS(text){
+  const c = cfg();
+  const endpoint = c.workerUrl
+    ? c.workerUrl.replace('/chat','/tts')
+    : 'https://api.cartesia.ai/tts/bytes';
+
+  const headers = c.workerUrl
+    ? { 'Content-Type':'application/json', 'X-Client-Key':c.clientKey }
+    : { 'Content-Type':'application/json', 'X-API-Key':c.cartKey, 'Cartesia-Version':'2024-06-10' };
+
+  const body = JSON.stringify({
+    transcript: text,
+    model_id: 'sonic-2',
+    voice: { mode:'id', id: c.voiceId||'' },
+    output_format: { container:'mp3', encoding:'mp3', sample_rate:44100 },
+    speed: parseFloat(c.ttsRate)||1.0,
+  });
+
+  const r = await fetch(endpoint, { method:'POST', headers, body });
+  if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||e.message||'Cartesia '+r.status); }
+  return await r.blob();
+}
+
+// ═══════════════════════════════════════════════════════
+//  AUDIO QUEUE — seamless playback
+// ═══════════════════════════════════════════════════════
+function enqueueAudio(blob){
+  audioQueue.push(blob);
+  if(!isPlayingAudio) playNextAudio();
+}
+
+function playNextAudio(){
+  if(bridgeActive) return; // hold — bridge video is still playing
+  if(audioQueue.length===0){
+    isPlayingAudio=false;
+    stopMouth();
+    setState('idle');
+    setTimeout(()=>{ if(state==='idle') startListening(); },700);
+    return;
+  }
+  isPlayingAudio=true;
+  const blob = audioQueue.shift();
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.playbackRate = parseFloat(cfg().ttsRate)||1.0;
+  audio.onended = ()=>{ URL.revokeObjectURL(url); playNextAudio(); };
+  audio.onerror = ()=>{ URL.revokeObjectURL(url); playNextAudio(); };
+  audio.play().catch(()=> playNextAudio());
+}
+
+// ═══════════════════════════════════════════════════════
+//  MUSETALK HOOK — real lip-sync when VPS is ready
+// ═══════════════════════════════════════════════════════
+async function museTalkAnimate(audioBlob){
+  const c = cfg();
+  if(!c.mtUrl || !c.imgUrl) return null;
+  try{
+    const fd = new FormData();
+    fd.append('audio', audioBlob, 'speech.wav');
+    fd.append('image_url', c.imgUrl);
+    const r = await fetch(c.mtUrl, { method:'POST', body:fd, signal: AbortSignal.timeout(15000) });
+    if(!r.ok) return null;
+    return URL.createObjectURL(await r.blob());
+  }catch(e){ return null; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  BRIDGE VIDEO ENGINE
+//  Plays a short reaction clip while LLM+TTS warm up.
+//  Audio queue is held until bridge ends → seamless flow.
+// ═══════════════════════════════════════════════════════
+function detectBridgeSentiment(text){
+  const t = text.toLowerCase();
+  if(/\?|what|which|how|tell me|recommend|suggest|don.t know|not sure|info|about/.test(t)) return 'think';
+  if(/add|order|want|like|love|great|perfect|yes|yeah|sure|get me|i.ll have/.test(t)) return 'react';
+  return 'affirm';
+}
+
+async function getBridgeVideoUrl(sentiment){
+  const r2 = cfg().r2Base;
+  if(!r2) return null;
+  const manifest = await fetchManifest();
+  if(!manifest) return null;
+  const prefix = 'bridge-'+sentiment+'-';
+  const urls = [];
+  for(let i=0;i<10;i++){
+    if(manifest[prefix+i]) urls.push(r2.replace(/\/$/,'')+'/'+manifest[prefix+i]);
+    else break;
+  }
+  if(!urls.length) return null;
+  return urls[Math.floor(Math.random()*urls.length)];
+}
+
+function playBridgeVideo(url){
+  return new Promise((resolve)=>{
+    bridgeActive = true;
+    setState('talking');
+    startMouth();
+    avVid.loop  = false;
+    avVid.muted = false; // bridge clips have Anna's voice baked in
+    avVid.src   = url;
+    avVid.classList.add('playing');
+    const release = ()=>{
+      avVid.classList.remove('playing');
+      bridgeActive = false;
+      resolve();
+      if(audioQueue.length) playNextAudio(); // kick queued TTS immediately
+    };
+    avVid.onended = release;
+    avVid.onerror = release;
+    avVid.play().catch(release);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  IDLE VIDEO CYCLING
+//  Loops through idle-0, idle-1, idle-2 … from manifest.
+//  Falls back to CSS breathing animation if none found.
+// ═══════════════════════════════════════════════════════
+async function startIdleCycle(){
+  if(idleVideoActive) return;
+  const r2 = cfg().r2Base;
+  if(!r2) return;
+  const manifest = await fetchManifest();
+  if(!manifest) return;
+  const idleUrls = [];
+  for(let i=0;i<10;i++){
+    if(manifest['idle-'+i]) idleUrls.push(r2.replace(/\/$/,'')+'/'+manifest['idle-'+i]);
+    else break;
+  }
+  if(!idleUrls.length) return;
+  idleVideoActive = true;
+  let idx = 0;
+  function nextIdle(){
+    if(state!=='idle'||!idleVideoActive){ avVid.classList.remove('playing'); idleVideoActive=false; return; }
+    avVid.loop  = false;
+    avVid.muted = true; // idle clips are silent ambient movement
+    avVid.src   = idleUrls[idx % idleUrls.length];
+    avVid.classList.add('playing');
+    avVid.onended = ()=>{ idx++; nextIdle(); };
+    avVid.onerror = ()=>{ idleVideoActive=false; avVid.classList.remove('playing'); };
+    avVid.play().catch(()=>{ idleVideoActive=false; avVid.classList.remove('playing'); });
+  }
+  nextIdle();
+}
+
+// ═══════════════════════════════════════════════════════
+//  R2 VIDEO LIBRARY — manifest-based lookup
+// ═══════════════════════════════════════════════════════
+let r2Manifest     = null;   // loaded once, cached
+let r2ManifestTime = 0;
+const MANIFEST_TTL = 5 * 60 * 1000; // re-fetch every 5 min
+
+// Intent keyword map — maps phrases to manifest keys
+const INTENT_MAP = [
+  // Generic intents
+  { keys:['welcome','hello','hi ','hey '],              intent:'welcome' },
+  { keys:['goodbye','bye','farewell','see you'],         intent:'goodbye' },
+  { keys:['show.*menu','see.*menu','menu please'],       intent:'show-menu' },
+  { keys:['drink','beverage','cocktail','juice','water'],intent:'show-drinks' },
+  { keys:['checkout','check out','pay','ready to pay'],  intent:'checkout' },
+  { keys:['promo','deal','discount','offer'],            intent:'promo' },
+  // Starters
+  { keys:['potato skin','loaded skin'],                  intent:'loaded-potato-skins' },
+  { keys:['chicken wing','buffalo wing','classic wing'], intent:'classic-chicken-wings' },
+  { keys:['boneless wing'],                              intent:'boneless-wings' },
+  { keys:['beef slider'],                                intent:'beef-sliders' },
+  { keys:['pulled pork slider','pork slider'],           intent:'pulled-pork-sliders' },
+  // Mains
+  { keys:['classic burger','regular burger'],            intent:'classic-burger' },
+  { keys:['bbq bacon','bacon burger','bbq burger'],      intent:'bbq-bacon-burger' },
+  { keys:['chicken caesar','caesar salad','caesar'],     intent:'chicken-caesar' },
+  { keys:['crispy chicken sandwich','chicken sandwich'], intent:'crispy-chicken-sandwich' },
+  { keys:['buttermilk chicken','chicken finger','tender'],intent:'buttermilk-chicken-fingers' },
+  { keys:['grilled chicken club','chicken club'],        intent:'grilled-chicken-club' },
+  { keys:['steak frites','steak frit','steak and fries'],intent:'steak-frites' },
+  // Sides
+  { keys:['french fries','fries','fry'],                 intent:'french-fries' },
+  { keys:['sweet potato fries','sweet potato'],          intent:'sweet-potato-fries' },
+  { keys:['onion ring'],                                 intent:'onion-rings' },
+  // Desserts
+  { keys:['cheesecake','ny cheesecake'],                 intent:'ny-cheesecake' },
+  { keys:['lava cake','chocolate lava','chocolate cake'],intent:'chocolate-lava-cake' },
+  { keys:['apple crumble','crumble'],                    intent:'apple-crumble' },
+  // Drinks
+  { keys:['stella artois','stella'],                     intent:'stella-artois' },
+  { keys:['budweiser','bud '],                           intent:'budweiser' },
+  { keys:['heineken'],                                   intent:'heineken' },
+  { keys:['corona'],                                     intent:'corona-extra' },
+  { keys:['old fashioned'],                              intent:'old-fashioned' },
+  { keys:['margarita'],                                  intent:'margarita' },
+  { keys:['coca.cola','coke(?! zero| light)'],           intent:'coca-cola' },
+  { keys:['diet coke','diet cola'],                      intent:'diet-coke' },
+  { keys:['iced tea','ice tea'],                         intent:'iced-tea' },
+  { keys:['green tea','hot tea'],                        intent:'hot-green-tea' },
+  { keys:['orange juice','oj'],                          intent:'orange-juice' },
+  { keys:['apple juice'],                                intent:'apple-juice' },
+];
+
+function detectIntent(text){
+  const t = text.toLowerCase();
+  for(const {keys,intent} of INTENT_MAP){
+    for(const k of keys){
+      if(new RegExp(k).test(t)) return intent;
+    }
+  }
+  return null;
+}
+
+async function fetchManifest(){
+  const r2 = cfg().r2Base;
+  if(!r2) return null;
+  const now = Date.now();
+  if(r2Manifest && now - r2ManifestTime < MANIFEST_TTL) return r2Manifest;
+  try{
+    const res = await fetch(r2.replace(/\/$/,'')+'/manifest.json?t='+now, { signal: AbortSignal.timeout(4000) });
+    if(res.ok){ r2Manifest = await res.json(); r2ManifestTime = now; return r2Manifest; }
+  }catch(e){ /* R2 not reachable, silently fall through */ }
+  return null;
+}
+
+async function checkR2VideoLibrary(userText){
+  const r2 = cfg().r2Base;
+  if(!r2) return null;
+
+  // 1. Check if user mentioned a specific menu item — plays Anna's pre-baked clip for it
+  const item = findMenuItem(userText);
+  if(item && item.videoFile){
+    return r2.replace(/\/$/,'')+'/'+item.videoFile;
+  }
+
+  // 2. Fall back to manifest-based generic intent (welcome, drinks, promo, etc.)
+  const manifest = await fetchManifest();
+  if(!manifest) return null;
+  const intent = detectIntent(userText);
+  if(!intent) return null;
+  const filename = manifest[intent];
+  if(!filename) return null;
+  return r2.replace(/\/$/,'')+'/'+filename;
+}
+
+// ═══════════════════════════════════════════════════════
+//  DEFAULT MENU (editable in settings as JSON)
+// ═══════════════════════════════════════════════════════
+const DEFAULT_MENU = [
+  // Starters
+  { id:'s1', name:'Loaded Potato Skins',       price:12.99, category:'starters', videoFile:'anna-loaded-potato-skins.mp4' },
+  { id:'s2', name:'Classic Chicken Wings',     price:14.99, category:'starters', videoFile:'anna-classic-chicken-wings.mp4' },
+  { id:'s3', name:'Boneless Wings',            price:14.99, category:'starters', videoFile:'anna-boneless-wings.mp4' },
+  { id:'s4', name:'Beef Sliders',              price:13.99, category:'starters', videoFile:'anna-beef-sliders.mp4' },
+  { id:'s5', name:'Pulled Pork Sliders',       price:13.99, category:'starters', videoFile:'anna-pulled-pork-sliders.mp4' },
+  // Mains
+  { id:'m1', name:'Classic Burger',            price:16.99, category:'mains',    videoFile:'anna-classic-burger.mp4' },
+  { id:'m2', name:'BBQ Bacon Burger',          price:18.99, category:'mains',    videoFile:'anna-bbq-bacon-burger.mp4' },
+  { id:'m3', name:'Chicken Caesar',            price:15.99, category:'mains',    videoFile:'anna-chicken-caesar.mp4' },
+  { id:'m4', name:'Crispy Chicken Sandwich',   price:16.99, category:'mains',    videoFile:'anna-crispy-chicken-sandwich.mp4' },
+  { id:'m5', name:'Buttermilk Chicken Fingers',price:15.99, category:'mains',    videoFile:'anna-buttermilk-chicken-fingers.mp4' },
+  { id:'m6', name:'Grilled Chicken Club',      price:17.99, category:'mains',    videoFile:'anna-grilled-chicken-club.mp4' },
+  { id:'m7', name:'Steak Frites',              price:24.99, category:'mains',    videoFile:'anna-steak-frites.mp4' },
+  // Sides
+  { id:'i1', name:'French Fries',              price:4.99,  category:'sides',    videoFile:'anna-french-fries.mp4' },
+  { id:'i2', name:'Sweet Potato Fries',        price:5.99,  category:'sides',    videoFile:'anna-sweet-potato-fries.mp4' },
+  { id:'i3', name:'Onion Rings',               price:5.99,  category:'sides',    videoFile:'anna-onion-rings.mp4' },
+  // Desserts
+  { id:'d1', name:'NY Cheesecake',             price:8.99,  category:'desserts', videoFile:'anna-ny-cheesecake.mp4' },
+  { id:'d2', name:'Chocolate Lava Cake',       price:9.99,  category:'desserts', videoFile:'anna-chocolate-lava-cake.mp4' },
+  { id:'d3', name:'Apple Crumble',             price:8.99,  category:'desserts', videoFile:'anna-apple-crumble.mp4' },
+  // Beer
+  { id:'b1', name:'Stella Artois',             price:7.99,  category:'drinks',   videoFile:'anna-stella-artois.mp4' },
+  { id:'b2', name:'Budweiser',                 price:6.99,  category:'drinks',   videoFile:'anna-budweiser.mp4' },
+  { id:'b3', name:'Heineken',                  price:7.99,  category:'drinks',   videoFile:'anna-heineken.mp4' },
+  { id:'b4', name:'Corona Extra',              price:7.99,  category:'drinks',   videoFile:'anna-corona-extra.mp4' },
+  // Cocktails
+  { id:'c1', name:'Old Fashioned',             price:13.99, category:'drinks',   videoFile:'anna-old-fashioned.mp4' },
+  { id:'c2', name:'Margarita',                 price:12.99, category:'drinks',   videoFile:'anna-margarita.mp4' },
+  // Soft drinks
+  { id:'r1', name:'Coca-Cola',                 price:3.99,  category:'drinks',   videoFile:'anna-coca-cola.mp4' },
+  { id:'r2', name:'Diet Coke',                 price:3.99,  category:'drinks',   videoFile:'anna-diet-coke.mp4' },
+  { id:'r3', name:'Iced Tea',                  price:3.99,  category:'drinks',   videoFile:'anna-iced-tea.mp4' },
+  { id:'r4', name:'Hot Green Tea',             price:3.99,  category:'drinks',   videoFile:'anna-hot-green-tea.mp4' },
+  { id:'r5', name:'Orange Juice',              price:4.99,  category:'drinks',   videoFile:'anna-orange-juice.mp4' },
+  { id:'r6', name:'Apple Juice',               price:4.99,  category:'drinks',   videoFile:'anna-apple-juice.mp4' },
+];
+
+function getMenu(){
+  try{ const j=S.get('menuJson',''); return j?JSON.parse(j):DEFAULT_MENU; }catch(e){ return DEFAULT_MENU; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  CART STATE
+// ═══════════════════════════════════════════════════════
+let cart = []; // [{ item, qty }]
+
+function cartTotal(){ return cart.reduce((s,e)=>s+e.item.price*e.qty,0); }
+function cartCount(){ return cart.reduce((s,e)=>s+e.qty,0); }
+
+function addToCart(item){
+  const ex=cart.find(e=>e.item.id===item.id);
+  if(ex) ex.qty++; else cart.push({item,qty:1});
+  updateCartBadge(); renderCartDrawer();
+}
+function removeFromCart(itemId){
+  const ex=cart.find(e=>e.item.id===itemId);
+  if(!ex) return;
+  ex.qty--; if(ex.qty<=0) cart=cart.filter(e=>e.item.id!==itemId);
+  updateCartBadge(); renderCartDrawer();
+}
+function clearCart(){ cart=[]; updateCartBadge(); renderCartDrawer(); }
+
+function updateCartBadge(){
+  const btn=document.getElementById('cartBtn');
+  const cnt=document.getElementById('cartCount');
+  const n=cartCount();
+  btn.style.display=n>0?'flex':'none';
+  btn.classList.toggle('has-items',n>0);
+  cnt.textContent=n;
+}
+
+function renderCartDrawer(){
+  const el=document.getElementById('cartItems');
+  const tot=document.getElementById('cartTotal');
+  tot.textContent='$'+cartTotal().toFixed(2);
+  if(!cart.length){
+    el.innerHTML='<div class="cart-empty">Your order is empty.<br/>Say "add the margherita" to start!</div>';
+    return;
+  }
+  el.innerHTML=cart.map(({item,qty})=>`
+    <div class="cart-item">
+      <div class="ci-name">${esc(item.name)}</div>
+      <div class="ci-qty">
+        <button class="qty-btn" onclick="removeFromCart('${item.id}')">−</button>
+        <span class="qty-val">${qty}</span>
+        <button class="qty-btn" onclick="addToCart(${JSON.stringify(item).replace(/"/g,'&quot;')})">+</button>
+      </div>
+      <div class="ci-price">$${(item.price*qty).toFixed(2)}</div>
+    </div>`).join('');
+}
+
+function openCart(){ document.getElementById('cartOverlay').classList.add('open'); document.getElementById('cartDrawer').classList.add('open'); }
+function closeCart(){ document.getElementById('cartOverlay').classList.remove('open'); document.getElementById('cartDrawer').classList.remove('open'); }
+function openCheckout(){
+  closeCart();
+  const el=document.getElementById('checkoutOverlay');
+  document.getElementById('coItems').innerHTML=cart.map(({item,qty})=>`
+    <div class="co-item">
+      <span class="co-item-name">${esc(item.name)} × ${qty}</span>
+      <span class="co-item-price">$${(item.price*qty).toFixed(2)}</span>
+    </div>`).join('');
+  document.getElementById('coTotal').textContent='$'+cartTotal().toFixed(2);
+  document.getElementById('orderConfirmed').classList.remove('show');
+  document.getElementById('checkoutInner').style.display='';
+  document.getElementById('coActions').style.display='';
+  el.classList.add('open');
+}
+function closeCheckout(){ document.getElementById('checkoutOverlay').classList.remove('open'); }
+function placeOrder(){
+  const num=String(Math.floor(1000+Math.random()*9000));
+  document.getElementById('confNum').textContent='Order #'+num;
+  document.getElementById('checkoutInner').style.display='none';
+  document.getElementById('coActions').style.display='none';
+  document.getElementById('orderConfirmed').classList.add('show');
+  clearCart();
+  // Anna says the confirmation
+  const msg='Your order has been placed! Order number '+num+'. We\'ll have it ready for you shortly.';
+  addBubble('av', msg);
+  annaSpeak(msg);
+  setTimeout(()=>{ closeCheckout(); },8000);
+}
+
+// ═══════════════════════════════════════════════════════
+//  COMMAND ROUTER — instant local action detection
+//  No API call needed. Phase 2: swap for on-device Gemma.
+// ═══════════════════════════════════════════════════════
+function findMenuItem(query){
+  const menu=getMenu();
+  const q=query.toLowerCase().trim();
+  // 1. Exact
+  let m=menu.find(i=>i.name.toLowerCase()===q); if(m) return m;
+  // 2. Contains full name
+  m=menu.find(i=>q.includes(i.name.toLowerCase())); if(m) return m;
+  // 3. Name contains query
+  m=menu.find(i=>i.name.toLowerCase().includes(q)); if(m) return m;
+  // 4. Word overlap (2+ chars)
+  const words=q.split(/\s+/).filter(w=>w.length>2);
+  m=menu.find(i=>words.some(w=>i.name.toLowerCase().includes(w))); if(m) return m;
+  return null;
+}
+
+function routeCommand(text){
+  const t=text.toLowerCase().trim();
+
+  // CHECKOUT
+  if(/check\s*out|ready\s*to\s*pay|place.*order|i.?m done|finish.*order|that.?s\s*(all|it)|pay\s*now/.test(t))
+    return { action:'checkout' };
+
+  // VIEW CART
+  if(/what.*(in|s in).*cart|my.*order|show.*cart|view.*cart|review.*order|what.*ordered|see.*order/.test(t))
+    return { action:'view_cart' };
+
+  // CLEAR CART
+  if(/clear.*cart|start.*over|cancel.*order|remove.*everything|empty.*cart/.test(t))
+    return { action:'clear_cart' };
+
+  // ADD TO CART — "add a pepperoni", "I want the salad", "can I get garlic bread", "I'll have a tiramisu"
+  const addRe=/(?:add|i\s*want|get\s*me|i.?d\s*like|can\s*i\s*get|order|i.?ll\s*have|give\s*me|one|two|a|an|the)\s+(?:a\s+|an\s+|the\s+|one\s+|two\s+)?(.+)/i;
+  const addM=addRe.exec(text);
+  if(addM){
+    const item=findMenuItem(addM[1].trim());
+    if(item) return { action:'add_cart', item };
+  }
+
+  // REMOVE
+  const remRe=/(?:remove|cancel|take\s*off|delete|no\s*more)\s+(?:the\s+)?(.+)/i;
+  const remM=remRe.exec(text);
+  if(remM){
+    const item=findMenuItem(remM[1].trim());
+    if(item) return { action:'remove_cart', item };
+  }
+
+  return null; // Not a command — send to Groq
+}
+
+// Quick Anna response (no Groq needed for action confirmations)
+function annaSpeak(text){
+  setState('talking'); startMouth();
+  const c=cfg();
+  if(c.cartKey&&c.voiceId){
+    cartesiaTTS(text).then(blob=>{ enqueueAudio(blob); }).catch(()=>webSpeechFallback(text));
+  } else {
+    webSpeechFallback(text);
+  }
+}
+
+async function executeAction(cmd, userText){
+  setState('thinking');
+  await new Promise(r=>setTimeout(r,120)); // tiny pause feels natural
+
+  const c=cfg();
+
+  switch(cmd.action){
+    case 'add_cart':{
+      addToCart(cmd.item);
+      const r2=await checkR2VideoLibrary(cmd.item.name);
+      if(r2){ addBubble('av','Added '+cmd.item.name+'!'); playVideoUrl(r2); }
+      else{
+        const msg=`Added ${cmd.item.name} to your order! Anything else?`;
+        addBubble('av', msg); annaSpeak(msg);
+      }
+      break;
+    }
+    case 'remove_cart':{
+      removeFromCart(cmd.item.id);
+      const msg=`Removed ${cmd.item.name}. Anything else?`;
+      addBubble('av', msg); annaSpeak(msg);
+      break;
+    }
+    case 'view_cart':{
+      openCart();
+      if(!cart.length){
+        const msg="Your cart is empty. Say something like 'add the classic burger' to get started!";
+        addBubble('av', msg); annaSpeak(msg);
+      } else {
+        const items=cart.map(e=>`${e.qty} ${e.item.name}`).join(', ');
+        const msg=`You have ${items} in your order. Total is $${cartTotal().toFixed(2)}. Ready to checkout?`;
+        addBubble('av', msg); annaSpeak(msg);
+      }
+      break;
+    }
+    case 'clear_cart':{
+      clearCart(); closeCart();
+      const msg="Order cleared. Start fresh — what would you like?";
+      addBubble('av', msg); annaSpeak(msg);
+      break;
+    }
+    case 'checkout':{
+      if(!cart.length){
+        const msg="Your cart is empty! Add some items first.";
+        addBubble('av', msg); annaSpeak(msg);
+      } else {
+        openCheckout();
+        const msg=`Your total is $${cartTotal().toFixed(2)}. Tap Place Order to confirm!`;
+        addBubble('av', msg); annaSpeak(msg);
+      }
+      break;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAP LOGGER — fire-and-forget to PocketBase
+// ═══════════════════════════════════════════════════════
+async function logGap(question, answer){
+  const pb = cfg().pbUrl;
+  if(!pb) return;
+  try{
+    await fetch(`${pb}/api/collections/av_gaps/records`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ question, answer, status:'new' })
+    });
+  }catch(e){
+    console.warn('[GapLog]', e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAIN CONVERSATION PIPELINE
+// ═══════════════════════════════════════════════════════
+async function handleUserInput(userText){
+  if(!userText.trim()) { setState('idle'); return; }
+
+  addBubble('user', userText);
+
+  // Check command router first — instant, no API cost
+  const cmd = routeCommand(userText);
+  if(cmd){ await executeAction(cmd, userText); return; }
+
+  setState('thinking');
+  audioQueue=[];
+
+  history.push({ role:'user', content:userText });
+  if(history.length>20) history=history.slice(-20);
+
+  const c = cfg();
+
+  // Check R2 library first (pre-baked videos = best quality)
+  const r2Url = await checkR2VideoLibrary(userText);
+  if(r2Url){
+    playVideoUrl(r2Url);
+    return;
+  }
+
+  // No pre-baked video → live TTS pipeline
+  if(!c.groqKey && !c.workerUrl){ demoMode(userText); return; }
+
+  // Fetch bridge video URL from manifest (fast — manifest is cached)
+  const bridgeUrl = await getBridgeVideoUrl(detectBridgeSentiment(userText));
+
+  const messages = [
+    { role:'system', content: c.sysPrompt },
+    ...history.slice(-10)
+  ];
+
+  let fullReply = '';
+  let firstSentence = true;
+
+  try{
+    // Fire LLM stream immediately — don't await, runs concurrently with bridge
+    const llamaPromise = streamLlama(messages, async (sentence)=>{
+      fullReply += (fullReply?' ':'')+sentence;
+
+      if(isMuted){
+        if(firstSentence){ firstSentence=false; addBubble('av', sentence); }
+        return;
+      }
+
+      if(firstSentence){ firstSentence=false; addBubble('av', sentence); }
+
+      // TTS fetches queue up — playNextAudio holds until bridge ends
+      try{
+        const blob = await cartesiaTTS(sentence);
+        enqueueAudio(blob);
+      }catch(e){
+        console.warn('[TTS]', e.message);
+        webSpeechFallback(sentence);
+      }
+    }, ()=>{
+      if(fullReply){
+        history.push({ role:'assistant', content:fullReply });
+        logGap(userText, fullReply);
+      }
+      if(isMuted){ stopMouth(); setState('idle'); setTimeout(()=>{ if(state==='idle') startListening(); },600); }
+    });
+
+    if(bridgeUrl){
+      // Bridge plays Anna reacting naturally while LLM+TTS warm up.
+      // When bridge ends, queued TTS audio fires automatically.
+      await playBridgeVideo(bridgeUrl);
+    } else {
+      setState('talking');
+      startMouth();
+    }
+
+    await llamaPromise;
+
+  }catch(e){
+    console.error('[Pipeline]', e);
+    showToast('Error: '+e.message,'warn');
+    setState('idle');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  VIDEO PLAYBACK (R2 or MuseTalk)
+// ═══════════════════════════════════════════════════════
+function playVideoUrl(url){
+  setState('talking');
+  avVid.loop  = false;
+  avVid.muted = false; // pre-baked videos carry their own voiceover
+  avVid.src   = url;
+  avVid.classList.add('playing');
+  avVid.play().catch(()=>{});
+  avVid.onended = ()=>{
+    avVid.classList.remove('playing');
+    setState('idle');
+    setTimeout(()=>{ if(state==='idle') startListening(); },600);
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+//  WEB SPEECH FALLBACK (if no Cartesia key)
+// ═══════════════════════════════════════════════════════
+function webSpeechFallback(text){
+  if(!window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = parseFloat(cfg().ttsRate)||1.0;
+  u.onboundary = ()=>{ mouthTarget=0.4+Math.random()*0.55; setTimeout(()=>{ mouthTarget=0.05; },130); };
+  u.onend = ()=>{ if(audioQueue.length===0&&!isPlayingAudio){ stopMouth(); setState('idle'); setTimeout(()=>{ if(state==='idle') startListening(); },700); } };
+  speechSynthesis.speak(u);
+}
+
+// ═══════════════════════════════════════════════════════
+//  DEMO MODE (no API configured)
+// ═══════════════════════════════════════════════════════
+function demoMode(userText){
+  const c = cfg();
+  const replies=[
+    `Hi! I'm ${c.name||'Anna'}. Add your Groq and Cartesia keys in Settings to enable live AI responses.`,
+    `I heard you! I'm in demo mode right now. Configure your API keys in Settings to go live.`,
+    `Great question! Once you add your Groq key in Settings, I'll give you real answers instantly.`,
+  ];
+  const reply=replies[Math.floor(Math.random()*replies.length)];
+  history.push({role:'assistant',content:reply});
+  addBubble('av',reply);
+  setState('talking');
+  startMouth();
+  webSpeechFallback(reply);
+  setTimeout(()=>{ stopMouth(); setState('idle'); setTimeout(()=>startListening(),600); },reply.length*55);
+}
+
+// ═══════════════════════════════════════════════════════
+//  RECORDING + VAD (Voice Activity Detection)
+// ═══════════════════════════════════════════════════════
+const SILENCE_THRESHOLD = 0.005;  // RMS below this = silence
+const SILENCE_DURATION  = 1200;   // ms of silence before auto-submit
+let chunks=[], recordingActive=false;
+
+async function startListening(){
+  if(state!=='idle') return;
+
+  let stream;
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true }, video:false });
+  }catch(e){
+    showToast('Mic access denied','warn'); return;
+  }
+
+  // Web Audio for VAD
+  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize=512;
+  src.connect(analyser);
+
+  chunks=[];
+  recorder = new MediaRecorder(stream, { mimeType: getSupportedMime() });
+  recorder.ondataavailable = e=>{ if(e.data.size>0) chunks.push(e.data); };
+  recorder.onstop = async ()=>{
+    stream.getTracks().forEach(t=>t.stop());
+    if(audioCtx){ try{ audioCtx.close(); }catch(e){} audioCtx=null; }
+    if(!recordingActive) return;
+    recordingActive=false;
+    const blob=new Blob(chunks,{type:recorder.mimeType||'audio/webm'});
+    setState('thinking');
+    liveCaption.textContent='';
+    try{
+      const text = await transcribeAudio(blob);
+      if(text) await handleUserInput(text);
+      else setState('idle');
+    }catch(e){
+      showToast('STT error: '+e.message,'warn'); setState('idle');
+    }
+  };
+
+  recorder.start(100);
+  recordingActive=true;
+  setState('listening');
+  startVAD();
+  // Auto-submit after 10s max in case VAD doesn't fire
+  silenceTimer = setTimeout(()=>{ if(state==='listening') stopListening(); }, 10000);
+}
+
+function startVAD(){
+  const buf=new Float32Array(analyser.fftSize);
+  let silenceStart=null;
+  let speechDetected=false;
+
+  function check(){
+    if(state!=='listening'||!analyser) return;
+    analyser.getFloatTimeDomainData(buf);
+    let sum=0; for(let i=0;i<buf.length;i++) sum+=buf[i]*buf[i];
+    const rms=Math.sqrt(sum/buf.length);
+
+    if(rms>SILENCE_THRESHOLD){
+      speechDetected=true;
+      silenceStart=null;
+    } else if(speechDetected){
+      if(!silenceStart) silenceStart=Date.now();
+      if(Date.now()-silenceStart>SILENCE_DURATION) { stopListening(); return; }
+    }
+    requestAnimationFrame(check);
+  }
+  check();
+}
+
+function stopListening(){
+  clearTimeout(silenceTimer);
+  if(recorder&&recorder.state!=='inactive'){
+    try{ recorder.stop(); }catch(e){}
+  }
+  recorder=null;
+}
+
+function getSupportedMime(){
+  const types=['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'];
+  for(const t of types) if(MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════
+//  MUSETALK STATUS PING
+// ═══════════════════════════════════════════════════════
+async function pingMuseTalk(){
+  const c=cfg();
+  if(!c.mtUrl){ mtBadge.textContent='MuseTalk: offline'; mtBadge.classList.remove('live'); mtOnline=false; return; }
+  try{
+    const r=await fetch(c.mtUrl.replace('/animate','/health'),{signal:AbortSignal.timeout(3000)});
+    mtOnline=r.ok;
+    mtBadge.textContent=r.ok?'MuseTalk: LIVE ✓':'MuseTalk: offline';
+    mtBadge.classList.toggle('live',r.ok);
+  }catch(e){ mtBadge.textContent='MuseTalk: offline'; mtBadge.classList.remove('live'); mtOnline=false; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  MUTE
+// ═══════════════════════════════════════════════════════
+function toggleMute(){
+  isMuted=!isMuted; S.set('muted',isMuted);
+  muteBtn.style.color=isMuted?'rgba(255,80,80,0.7)':'';
+  muteLbl.textContent=isMuted?'Muted':'Voice';
+  muteIc.innerHTML=isMuted
+    ?'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'
+    :'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>';
+  if(isMuted&&speechSynthesis.speaking) speechSynthesis.cancel();
+  showToast(isMuted?'Voice muted':'Voice on','info');
+}
+
+// ═══════════════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════════════
+function openSettings(){
+  const c=cfg();
+  document.getElementById('sName').value     = c.name||'';
+  document.getElementById('sImg').value      = c.imgUrl||'';
+  document.getElementById('sGroqKey').value  = c.groqKey||'';
+  document.getElementById('sModel').value    = c.model||'llama-3.3-70b-versatile';
+  document.getElementById('sCartesiaKey').value = c.cartKey||'';
+  document.getElementById('sVoiceId').value  = c.voiceId||'';
+  document.getElementById('sTtsRate').value  = String(c.ttsRate||1.0);
+  document.getElementById('sTtsRateVal').textContent = (c.ttsRate||1.0)+'x';
+  document.getElementById('sSysPrompt').value= c.sysPrompt||'';
+  document.getElementById('sMaxTok').value   = String(c.maxTok||120);
+  document.getElementById('sR2Base').value    = c.r2Base    ||'';
+  document.getElementById('sWorkerUrl').value= c.workerUrl||'';
+  document.getElementById('sClientKey').value= c.clientKey||'';
+  document.getElementById('sMtUrl').value    = c.mtUrl||'';
+  document.getElementById('sPbUrl').value    = c.pbUrl||'';
+  document.getElementById('sLang').value     = c.lang||'en';
+  settingsOverlay.style.display='flex';
+}
+
+function saveSettings(){
+  S.set('name',        document.getElementById('sName').value.trim());
+  S.set('imgUrl',      document.getElementById('sImg').value.trim());
+  S.set('groqKey',     document.getElementById('sGroqKey').value.trim());
+  S.set('model',       document.getElementById('sModel').value);
+  S.set('cartKey',     document.getElementById('sCartesiaKey').value.trim());
+  S.set('voiceId',     document.getElementById('sVoiceId').value.trim());
+  S.set('ttsRate',     parseFloat(document.getElementById('sTtsRate').value)||1.0);
+  S.set('sysPrompt',   document.getElementById('sSysPrompt').value.trim());
+  S.set('maxTok',      parseInt(document.getElementById('sMaxTok').value)||120);
+  S.set('r2Base',      document.getElementById('sR2Base').value.trim().replace(/\/$/,''));
+  S.set('workerUrl',   document.getElementById('sWorkerUrl').value.trim());
+  S.set('clientKey',   document.getElementById('sClientKey').value.trim());
+  S.set('mtUrl',       document.getElementById('sMtUrl').value.trim());
+  S.set('pbUrl',       document.getElementById('sPbUrl').value.trim().replace(/\/$/,''));
+  S.set('lang',        document.getElementById('sLang').value.trim()||'en');
+  settingsOverlay.style.display='none';
+  loadAvatar();
+  updateVoiceLabel();
+  pingMuseTalk();
+  showToast('Saved');
+}
+
+function updateVoiceLabel(){
+  const c=cfg();
+  if(c.voiceId) voiceLbl.textContent='Cartesia: '+c.voiceId.slice(0,20)+'…';
+  else if(c.groqKey) voiceLbl.textContent='Web Speech (add Cartesia for better voice)';
+  else voiceLbl.textContent='No voice configured — open Settings';
+}
+
+document.getElementById('sTtsRate').addEventListener('input',function(){
+  document.getElementById('sTtsRateVal').textContent=parseFloat(this.value).toFixed(2)+'x';
+});
+
+// Test voice button
+document.getElementById('testVoiceBtn').addEventListener('click',async ()=>{
+  const c=cfg();
+  const testText='Hi! I\'m '+(c.name||'Anna')+'. Ready to go.';
+  if(c.cartKey&&c.voiceId){
+    try{
+      showToast('Testing Cartesia voice…','info');
+      const blob=await cartesiaTTS(testText);
+      const url=URL.createObjectURL(blob);
+      const a=new Audio(url); a.play(); a.onended=()=>URL.revokeObjectURL(url);
+    }catch(e){ showToast('Cartesia error: '+e.message,'warn'); }
+  } else {
+    if(window.speechSynthesis){
+      const u=new SpeechSynthesisUtterance(testText);
+      speechSynthesis.speak(u);
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+let toastT=null;
+function showToast(msg,type='ok'){
+  let t=document.querySelector('.toast'); if(t) t.remove();
+  t=document.createElement('div');
+  t.className='toast toast-'+type; t.textContent=msg;
+  document.body.appendChild(t);
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>{ t.classList.add('out'); setTimeout(()=>t.remove(),320); },2400);
+}
+
+// ═══════════════════════════════════════════════════════
+//  EVENTS
+// ═══════════════════════════════════════════════════════
+micBtn.addEventListener('click',()=>{
+  if(state==='talking'){
+    // Interrupt Anna — stop audio, restart listening
+    speechSynthesis.cancel();
+    audioQueue=[]; isPlayingAudio=false;
+    stopMouth(); avVid.classList.remove('playing');
+    setState('idle');
+    setTimeout(()=>startListening(), 300);
+  } else if(state==='listening'){
+    // Force-stop current recording and submit whatever was captured
+    stopListening();
+  } else if(state==='idle'){
+    startListening();
+  }
+});
+muteBtn.addEventListener('click', toggleMute);
+document.getElementById('clearBtn').addEventListener('click',()=>{
+  if(speechSynthesis.speaking) speechSynthesis.cancel();
+  audioQueue=[]; isPlayingAudio=false; history=[];
+  stopMouth(); avVid.classList.remove('playing');
+  transcript.innerHTML=''; transcript.appendChild(txEmpty); txEmpty.style.display='';
+  setState('idle');
+  showToast('Cleared');
+});
+document.getElementById('settingsBtn').addEventListener('click', openSettings);
+document.getElementById('saveBtn').addEventListener('click', saveSettings);
+document.getElementById('cancelBtn').addEventListener('click',()=>{ settingsOverlay.style.display='none'; });
+settingsOverlay.addEventListener('click',e=>{ if(e.target===settingsOverlay) settingsOverlay.style.display='none'; });
+
+// Cart + checkout
+document.getElementById('cartBtn').addEventListener('click', openCart);
+document.getElementById('cartClose').addEventListener('click', closeCart);
+document.getElementById('cartOverlay').addEventListener('click', closeCart);
+document.getElementById('checkoutBtn').addEventListener('click', openCheckout);
+document.getElementById('placeOrderBtn').addEventListener('click', placeOrder);
+document.getElementById('backToCartBtn').addEventListener('click', ()=>{ closeCheckout(); openCart(); });
+
+// ═══════════════════════════════════════════════════════
+//  TAB SWITCHING + MENU RENDER
+// ═══════════════════════════════════════════════════════
+function switchTab(tab){
+  const chatBtn = document.getElementById('tabChatBtn');
+  const menuBtn = document.getElementById('tabMenuBtn');
+  const chatPanel = document.getElementById('panelChat');
+  const menuPanel = document.getElementById('panelMenu');
+  if(tab==='chat'){
+    chatBtn.classList.add('active'); menuBtn.classList.remove('active');
+    chatPanel.classList.remove('panel-hidden'); menuPanel.classList.add('panel-hidden');
+  } else {
+    menuBtn.classList.add('active'); chatBtn.classList.remove('active');
+    menuPanel.classList.remove('panel-hidden'); chatPanel.classList.add('panel-hidden');
+    renderMenuPanel();
+  }
+}
+
+function renderMenuPanel(){
+  const menu = getMenu();
+  const panel = document.getElementById('panelMenu');
+  const catOrder = ['starters','mains','sides','desserts','drinks'];
+  const catNames = {starters:'Starters',mains:'Mains',sides:'Sides',desserts:'Desserts',drinks:'Drinks'};
+  panel.innerHTML = catOrder.map(cat=>{
+    const items = menu.filter(i=>i.category===cat);
+    if(!items.length) return '';
+    return `<div class="menu-cat">
+      <div class="menu-cat-title">${catNames[cat]||cat}</div>
+      ${items.map(item=>`
+        <div class="menu-item">
+          <div class="mi-name">${esc(item.name)}</div>
+          <div class="mi-price">$${item.price.toFixed(2)}</div>
+          <button class="mi-add" onclick="addToCart(${JSON.stringify(item).replace(/"/g,'&quot;')});showToast('Added ${esc(item.name)}')">+</button>
+        </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+function init(){
+  loadAvatar();
+  updateVoiceLabel();
+  setState('idle');
+  startSparkles();
+  pingMuseTalk();
+  if(isMuted){ muteBtn.style.color='rgba(255,80,80,0.7)'; muteLbl.textContent='Muted';
+    muteIc.innerHTML='<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>'; }
+  const c=cfg();
+  if(!c.groqKey&&!c.cartKey&&!c.workerUrl){
+    setTimeout(openSettings,700);
+  } else {
+    // Auto-start listening immediately — mic is always on
+    setTimeout(()=>{ if(state==='idle') startListening(); }, 1000);
+  }
+}
+init();
+</script>
+</body>
+</html>
