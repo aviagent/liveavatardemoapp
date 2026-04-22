@@ -371,7 +371,11 @@ input[type=file]{display:none}
   box-shadow:0 6px 24px rgba(201,168,76,.45);
   animation:fadeUp .4s .35s ease both;width:100%;max-width:340px;
 }
+/* ── STRIPE PAYMENT ELEMENT ── */
+#stripe-payment-el{min-height:180px;margin-bottom:16px}
+.stripe-paying{display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;color:var(--text2);font-size:14px}
 </style>
+<script src="https://js.stripe.com/v3/"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -4354,6 +4358,8 @@ function AdminSettingsPanel({showToast}){
   const[pbUrl,setPbUrl]=useState(()=>store.get('anna_pb_url',''));
   const[pbAdminToken,setPbAdminToken]=useState(()=>store.get('stellas_pb_admin_token',''));
   const[stripeLink,setStripeLink]=useState(()=>store.get('stellas_stripe_link',''));
+  const[stripePubKey,setStripePubKey]=useState(()=>store.get('anna_stripe_pub_key','pk_live_51StWGZFHnxwGM8qVgMa7ZseWOnYbpJs1M6PpSH0peASd7Fyik1VH0US9vVSfaocFrYHLqf4b7rJ8wTW6ZKzuXREQ00k9Cz2tmQ'));
+  const[stripeWorkerUrl,setStripeWorkerUrl]=useState(()=>store.get('anna_stripe_worker_url','https://anna-stripe-worker.littf02.workers.dev'));
   const[homeTitles,setHomeTitles]=useState(()=>store.get('stellas_home_titles',{highlights:'Menu Highlights',picks:"Chef's Picks",picksCategory:'Mains'}));
   const[revealed,setRevealed]=useState({});
   const[saving,setSaving]=useState(false);
@@ -4377,6 +4383,8 @@ function AdminSettingsPanel({showToast}){
     store.set('stellas_pb_admin_token',pbAdminToken.trim());
     store.set('stellas_home_titles',homeTitles);
     store.set('stellas_stripe_link',stripeLink.trim());
+    store.set('anna_stripe_pub_key',stripePubKey.trim());
+    store.set('anna_stripe_worker_url',stripeWorkerUrl.trim());
     store.set('anna_cartesia_key',cartesiaKey.trim());
     store.set('anna_voice_id',annaVoiceId.trim());
     store.set('anna_stt_mode',sttMode);
@@ -4532,14 +4540,18 @@ function AdminSettingsPanel({showToast}){
     // -- 6. Home Page --
     h(Accord,{id:'stripe',emoji:'💳',label:'Stripe Payments'},
       h('div',{style:{fontSize:13,color:'var(--text2)',lineHeight:1.6,marginBottom:14}},
-        'Add a Stripe checkout option at cart. Customers choose to pay online or at the register. Create a Payment Link at ',h('b',null,'stripe.com/payment-links'),' and paste it below.'
+        'In-app card payments powered by Stripe. Customers pay with card, Apple Pay, or Google Pay right inside the app.'
       ),
       h('div',{style:{marginBottom:10}},
-        h('label',{className:'label'},'Stripe Payment Link'),
-        h('input',{value:stripeLink,onChange:e=>setStripeLink(e.target.value),placeholder:'https://buy.stripe.com/…',className:'field'})
+        h('label',{className:'label'},'Stripe Publishable Key'),
+        h('input',{value:stripePubKey,onChange:e=>setStripePubKey(e.target.value),placeholder:'pk_live_…',className:'field'})
+      ),
+      h('div',{style:{marginBottom:10}},
+        h('label',{className:'label'},'Payment Worker URL'),
+        h('input',{value:stripeWorkerUrl,onChange:e=>setStripeWorkerUrl(e.target.value),placeholder:'https://anna-stripe-worker.…',className:'field'})
       ),
       h('div',{style:{fontSize:11,color:'var(--text3)',lineHeight:1.5,padding:'8px 10px',background:'rgba(201,168,76,.06)',borderRadius:8}},
-        '💡 Leave blank to hide the Stripe option — only "Pay at Restaurant" will show.'
+        '🔑 Add your Stripe secret key to the worker: run ',h('code',null,'echo sk_live_… | npx wrangler secret put STRIPE_SECRET --name anna-stripe-worker'),' in terminal.'
       )
     ),
 
@@ -4989,6 +5001,65 @@ function OrderConfirmPage({orderNum, items, customer, onDone}){
 // ==========================================
 // TAKEOUT CART DRAWER
 // ==========================================
+// ── STRIPE IN-APP PAYMENT STEP ──────────────────────────────────────────────
+function StripePaymentStep({total, onSuccess, onBack, showToast}){
+  const elRef = useRef(null);
+  const stripeRef = useRef(null);
+  const elementsRef = useRef(null);
+  const [paying, setPaying] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [err, setErr] = useState('');
+
+  useEffect(()=>{
+    const pk = store.get('anna_stripe_pub_key','');
+    const workerUrl = store.get('anna_stripe_worker_url','https://anna-stripe-worker.littf02.workers.dev');
+    if(!pk||!workerUrl){ setErr('Stripe not configured — add keys in Admin → Settings.'); return; }
+    if(!window.Stripe){ setErr('Stripe.js failed to load.'); return; }
+
+    const amountCents = Math.round(total * 100);
+    stripeRef.current = window.Stripe(pk);
+
+    fetch(workerUrl+'/create-payment-intent',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({amount: amountCents, currency:'usd', description:'Restaurant order'})
+    })
+    .then(r=>r.json())
+    .then(data=>{
+      if(data.error){ setErr('Payment setup failed: '+data.error); return; }
+      const elements = stripeRef.current.elements({
+        clientSecret: data.clientSecret,
+        appearance:{ theme:'night', variables:{ colorPrimary:'#c9a84c', colorBackground:'#0f2218', fontFamily:'Lato, sans-serif' }}
+      });
+      elementsRef.current = elements;
+      const el = elements.create('payment');
+      el.mount(elRef.current);
+      el.on('ready', ()=>setReady(true));
+    })
+    .catch(e=>setErr('Network error: '+e.message));
+  },[]);
+
+  async function confirm(){
+    if(!stripeRef.current||!elementsRef.current) return;
+    setPaying(true); setErr('');
+    const {error} = await stripeRef.current.confirmPayment({
+      elements: elementsRef.current,
+      confirmParams:{ return_url: window.location.href },
+      redirect:'if_required'
+    });
+    if(error){ setErr(error.message); setPaying(false); }
+    else{ showToast('✓ Payment successful!'); onSuccess(); }
+  }
+
+  return h('div',{style:{padding:'4px 0 8px'}},
+    err && h('div',{style:{color:'#f87171',fontSize:13,marginBottom:12,padding:'8px 10px',background:'rgba(248,113,113,.1)',borderRadius:8}},err),
+    !err && h('div',{ref:elRef,id:'stripe-payment-el'}),
+    !err && paying && h('div',{className:'stripe-paying'},'Processing payment…'),
+    !err && !paying && h('button',{className:'btn btn-green',style:{width:'100%',fontSize:16,padding:'15px',marginBottom:10,opacity:ready?1:0.5},onClick:confirm,disabled:!ready},'💳 Confirm Payment — $'+total.toFixed(2)),
+    h('button',{className:'btn',style:{width:'100%',fontSize:14,padding:'12px',background:'transparent',border:'1.5px solid rgba(201,168,76,.25)',color:'rgba(201,168,76,.6)',borderRadius:50},onClick:onBack},'← Back')
+  );
+}
+
 function TakeoutCartDrawer({cart, setCart, onClose, onCheckout, showToast, onViewLastOrder}){
   // Always read fresh from sessionStorage inside component — no prop dependency
   const [cachedOrder, setCachedOrder] = useState(null);
@@ -5116,9 +5187,14 @@ function TakeoutCartDrawer({cart, setCart, onClose, onCheckout, showToast, onVie
         ),
         step==='info'&&h('div',null,
           h('button',{className:'btn btn-green',style:{width:'100%',fontSize:16,padding:'15px',marginBottom:10},onClick:submitOrder},'🍽 Pay at Restaurant'),
-          (()=>{const sl=store.get('stellas_stripe_link','');return sl?h('button',{className:'btn',style:{width:'100%',fontSize:16,padding:'15px',background:'#635BFF',color:'white',border:'none',borderRadius:50},onClick:()=>{window.open(sl,'_blank');submitOrder();}},
-            '💳 Pay with Stripe'):null;})()
-        )
+          (()=>{const pk=store.get('anna_stripe_pub_key','');return pk?h('button',{className:'btn',style:{width:'100%',fontSize:16,padding:'15px',background:'#635BFF',color:'white',border:'none',borderRadius:50,marginTop:0},onClick:()=>setStep('payment')},'💳 Pay by Card'):null;})()
+        ),
+        step==='payment'&&h(StripePaymentStep,{
+          total,
+          onSuccess:()=>{submitOrder();setStep('cart');},
+          onBack:()=>setStep('info'),
+          showToast
+        })
       )
     )
   );
