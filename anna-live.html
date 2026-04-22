@@ -423,7 +423,7 @@ select.fld option{background:#0f2218;color:white}
       <img class="av-img" id="avImg" src="" alt="Avatar" style="display:none"/>
 
       <!-- Video element — MuseTalk output OR R2 pre-baked -->
-      <video class="av-video" id="avVideo" playsinline></video>
+      <video class="av-video" id="avVideo" playsinline preload="none"></video>
 
       <!-- Mouth overlay -->
       <div class="mouth-wrap" id="mouthWrap">
@@ -756,7 +756,7 @@ function setState(s){
   if(s==='listening') micBtn.classList.add('listening');
   if(s==='thinking')  micBtn.classList.add('thinking');
   if(s==='talking')   micBtn.classList.add('talking');
-  if(s==='idle'){ startSparkles(); startIdleCycle(); }
+  if(s==='idle'){ startSparkles(); setTimeout(startIdleCycle, 3000); }
   else { stopSparkles(); idleVideoActive=false; }
 }
 
@@ -769,6 +769,7 @@ function loadAvatar(){
   if(c.imgUrl){
     avImg.onload = ()=>{ avImg.style.display='block'; avPh.style.display='none'; };
     avImg.onerror = ()=>{ avImg.style.display='none'; avPh.style.display='flex'; };
+    avImg.loading = 'lazy';
     avImg.src = c.imgUrl;
   } else {
     avImg.style.display='none'; avPh.style.display='flex';
