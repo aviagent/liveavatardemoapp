@@ -635,7 +635,7 @@ const S = {
 
 function cfg(){ return {
   name:       S.get('name','Anna'),
-  imgUrl:     S.get('imgUrl',''),
+  imgUrl:     S.get('imgUrl','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev/anna-hero.jpg'),
   groqKey:    S.get('groqKey',''),
   model:      S.get('model','llama-3.3-70b-versatile'),
   cartKey:    S.get('cartKey',''),
@@ -965,7 +965,7 @@ function detectBridgeSentiment(text){
 }
 
 async function getBridgeVideoUrl(sentiment){
-  const r2 = S.get('r2Base','');
+  const r2 = S.get('r2Base','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev');
   if(!r2) return null;
   const manifest = await fetchManifest();
   if(!manifest) return null;
@@ -1007,7 +1007,7 @@ function playBridgeVideo(url){
 // ═══════════════════════════════════════════════════════
 async function startIdleCycle(){
   if(idleVideoActive) return;
-  const r2 = S.get('r2Base','');
+  const r2 = S.get('r2Base','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev');
   if(!r2) return;
   const manifest = await fetchManifest();
   if(!manifest) return;
@@ -1079,7 +1079,7 @@ function detectIntent(text){
 }
 
 async function fetchManifest(){
-  const r2 = S.get('r2Base','');
+  const r2 = S.get('r2Base','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev');
   if(!r2) return null;
   const now = Date.now();
   if(r2Manifest && now - r2ManifestTime < MANIFEST_TTL) return r2Manifest;
@@ -1091,7 +1091,7 @@ async function fetchManifest(){
 }
 
 async function checkR2VideoLibrary(userText){
-  const r2 = S.get('r2Base','');
+  const r2 = S.get('r2Base','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev');
   if(!r2) return null;
 
   const manifest = await fetchManifest();
