@@ -397,7 +397,7 @@ select.fld option{background:#0f2218;color:white}
       <img class="av-img" id="avImg" src="" alt="Avatar" style="display:none"/>
 
       <!-- Video element — MuseTalk output OR R2 pre-baked -->
-      <video class="av-video" id="avVideo" playsinline muted loop></video>
+      <video class="av-video" id="avVideo" playsinline></video>
 
       <!-- Mouth overlay -->
       <div class="mouth-wrap" id="mouthWrap">
@@ -641,9 +641,9 @@ function cfg(){ return {
   cartKey:    S.get('cartKey',''),
   voiceId:    S.get('voiceId',''),
   ttsRate:    S.get('ttsRate',1.0),
-  sysPrompt:  S.get('sysPrompt','You are Anna, a warm and friendly AI host. Keep responses short and conversational — 1 to 2 sentences. Never use markdown, bullet points, or lists. Speak naturally.'),
+  sysPrompt:  S.get('sysPrompt','You are Anna, the live host at this restaurant. You\'ve run great rooms for years and you know exactly what you\'re talking about. Speak like a real person — use contractions, natural openers like "Oh,", "Mmm,", "You know what?", "Honestly,". One or two punchy sentences max. Never use lists, bullet points, or markdown. Never say "certainly" or "of course". Sound like yourself, not a chatbot.'),
   maxTok:     S.get('maxTok',120),
-  r2Base:     S.get('r2Base',''),
+  r2Base:     S.get('r2Base','https://pub-256270f3b6ae4b05a10dafb461aaab7e.r2.dev'),
   workerUrl:  S.get('workerUrl',''),
   clientKey:  S.get('clientKey',''),
   mtUrl:      S.get('mtUrl',''),
@@ -668,6 +668,8 @@ let mouthOpen = 0;
 let mouthTarget = 0;
 let sparkTimer = null;
 let mtOnline = false;
+let bridgeActive = false;   // blocks TTS audio queue while bridge video plays
+let idleVideoActive = false; // true while idle video cycle is running
 
 const app    = document.getElementById('app');
 const avImg  = document.getElementById('avImg');
@@ -708,7 +710,8 @@ function setState(s){
   if(s==='listening') micBtn.classList.add('listening');
   if(s==='thinking')  micBtn.classList.add('thinking');
   if(s==='talking')   micBtn.classList.add('talking');
-  if(s==='idle') startSparkles(); else stopSparkles();
+  if(s==='idle'){ startSparkles(); startIdleCycle(); }
+  else { stopSparkles(); idleVideoActive=false; }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -915,11 +918,11 @@ function enqueueAudio(blob){
 }
 
 function playNextAudio(){
+  if(bridgeActive) return; // hold — bridge video is still playing
   if(audioQueue.length===0){
     isPlayingAudio=false;
     stopMouth();
     setState('idle');
-    // AUTO-RESTART LISTENING — always, mic stays on
     setTimeout(()=>{ if(state==='idle') startListening(); },700);
     return;
   }
@@ -947,6 +950,86 @@ async function museTalkAnimate(audioBlob){
     if(!r.ok) return null;
     return URL.createObjectURL(await r.blob());
   }catch(e){ return null; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  BRIDGE VIDEO ENGINE
+//  Plays a short reaction clip while LLM+TTS warm up.
+//  Audio queue is held until bridge ends → seamless flow.
+// ═══════════════════════════════════════════════════════
+function detectBridgeSentiment(text){
+  const t = text.toLowerCase();
+  if(/\?|what|which|how|tell me|recommend|suggest|don.t know|not sure|info|about/.test(t)) return 'think';
+  if(/add|order|want|like|love|great|perfect|yes|yeah|sure|get me|i.ll have/.test(t)) return 'react';
+  return 'affirm';
+}
+
+async function getBridgeVideoUrl(sentiment){
+  const r2 = S.get('r2Base','');
+  if(!r2) return null;
+  const manifest = await fetchManifest();
+  if(!manifest) return null;
+  const prefix = 'bridge-'+sentiment+'-';
+  const urls = [];
+  for(let i=0;i<10;i++){
+    if(manifest[prefix+i]) urls.push(r2.replace(/\/$/,'')+'/'+manifest[prefix+i]);
+    else break;
+  }
+  if(!urls.length) return null;
+  return urls[Math.floor(Math.random()*urls.length)];
+}
+
+function playBridgeVideo(url){
+  return new Promise((resolve)=>{
+    bridgeActive = true;
+    setState('talking');
+    startMouth();
+    avVid.loop  = false;
+    avVid.muted = false; // bridge clips have Anna's voice baked in
+    avVid.src   = url;
+    avVid.classList.add('playing');
+    const release = ()=>{
+      avVid.classList.remove('playing');
+      bridgeActive = false;
+      resolve();
+      if(audioQueue.length) playNextAudio(); // kick queued TTS immediately
+    };
+    avVid.onended = release;
+    avVid.onerror = release;
+    avVid.play().catch(release);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  IDLE VIDEO CYCLING
+//  Loops through idle-0, idle-1, idle-2 … from manifest.
+//  Falls back to CSS breathing animation if none found.
+// ═══════════════════════════════════════════════════════
+async function startIdleCycle(){
+  if(idleVideoActive) return;
+  const r2 = S.get('r2Base','');
+  if(!r2) return;
+  const manifest = await fetchManifest();
+  if(!manifest) return;
+  const idleUrls = [];
+  for(let i=0;i<10;i++){
+    if(manifest['idle-'+i]) idleUrls.push(r2.replace(/\/$/,'')+'/'+manifest['idle-'+i]);
+    else break;
+  }
+  if(!idleUrls.length) return;
+  idleVideoActive = true;
+  let idx = 0;
+  function nextIdle(){
+    if(state!=='idle'||!idleVideoActive){ avVid.classList.remove('playing'); idleVideoActive=false; return; }
+    avVid.loop  = false;
+    avVid.muted = true; // idle clips are silent ambient movement
+    avVid.src   = idleUrls[idx % idleUrls.length];
+    avVid.classList.add('playing');
+    avVid.onended = ()=>{ idx++; nextIdle(); };
+    avVid.onerror = ()=>{ idleVideoActive=false; avVid.classList.remove('playing'); };
+    avVid.play().catch(()=>{ idleVideoActive=false; avVid.classList.remove('playing'); });
+  }
+  nextIdle();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1295,6 +1378,9 @@ async function handleUserInput(userText){
   // No pre-baked video → live TTS pipeline
   if(!c.groqKey && !c.workerUrl){ demoMode(userText); return; }
 
+  // Fetch bridge video URL from manifest (fast — manifest is cached)
+  const bridgeUrl = await getBridgeVideoUrl(detectBridgeSentiment(userText));
+
   const messages = [
     { role:'system', content: c.sysPrompt },
     ...history.slice(-10)
@@ -1304,40 +1390,43 @@ async function handleUserInput(userText){
   let firstSentence = true;
 
   try{
-    setState('talking');
-    startMouth();
-
-    await streamLlama(messages, async (sentence)=>{
+    // Fire LLM stream immediately — don't await, runs concurrently with bridge
+    const llamaPromise = streamLlama(messages, async (sentence)=>{
       fullReply += (fullReply?' ':'')+sentence;
 
       if(isMuted){
-        // Muted — just animate, no TTS fetch
         if(firstSentence){ firstSentence=false; addBubble('av', sentence); }
         return;
       }
 
-      if(firstSentence){
-        firstSentence=false;
-        addBubble('av', sentence); // show first sentence immediately
-      }
+      if(firstSentence){ firstSentence=false; addBubble('av', sentence); }
 
-      // Fetch Cartesia TTS for this sentence
+      // TTS fetches queue up — playNextAudio holds until bridge ends
       try{
         const blob = await cartesiaTTS(sentence);
         enqueueAudio(blob);
       }catch(e){
         console.warn('[TTS]', e.message);
-        // Fall back to Web Speech API
         webSpeechFallback(sentence);
       }
     }, ()=>{
-      // All sentences received
       if(fullReply){
         history.push({ role:'assistant', content:fullReply });
-        logGap(userText, fullReply); // background — no pre-baked video existed
+        logGap(userText, fullReply);
       }
       if(isMuted){ stopMouth(); setState('idle'); setTimeout(()=>{ if(state==='idle') startListening(); },600); }
     });
+
+    if(bridgeUrl){
+      // Bridge plays Anna reacting naturally while LLM+TTS warm up.
+      // When bridge ends, queued TTS audio fires automatically.
+      await playBridgeVideo(bridgeUrl);
+    } else {
+      setState('talking');
+      startMouth();
+    }
+
+    await llamaPromise;
 
   }catch(e){
     console.error('[Pipeline]', e);
@@ -1351,7 +1440,9 @@ async function handleUserInput(userText){
 // ═══════════════════════════════════════════════════════
 function playVideoUrl(url){
   setState('talking');
-  avVid.src = url;
+  avVid.loop  = false;
+  avVid.muted = false; // pre-baked videos carry their own voiceover
+  avVid.src   = url;
   avVid.classList.add('playing');
   avVid.play().catch(()=>{});
   avVid.onended = ()=>{
