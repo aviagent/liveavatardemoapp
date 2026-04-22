@@ -559,7 +559,7 @@ function menuFromPB(row){
     id:row.app_id||row.id,
     name:row.name,
     price:row.price,
-    cat:row.category||row.cat||'',
+    cat:(row.category||row.cat||'').replace(/\b\w/g,c=>c.toUpperCase()),
     desc:row.description||row.desc||'',
     ing:row.ing||'',
     videoUrl:row.video_url||'',
